@@ -1,3 +1,4 @@
+from typing import List
 from ..abcs.database_types import (
     DbPath,
     Timestamp,
@@ -88,6 +89,13 @@ class PostgresqlDialect(BaseDialect, Mixin_Schema):
 
     def to_string(self, s: str):
         return f"{s}::varchar"
+
+    def concat(self, items: List[str]) -> str:
+        # Postgres does not allow functions that have more that have more than 100 arguments.
+        # When using the concat function, this limits comparisons to less than 50 fields.
+        # Using || for concat fixes this.
+        joined_exprs = " || ".join(items)
+        return f"({joined_exprs})"
 
     def _convert_db_precision_to_digits(self, p: int) -> int:
         # Subtracting 2 due to wierd precision issues in PostgreSQL

@@ -73,6 +73,7 @@ class Dialect(BaseDialect, Mixin_Schema, Mixin_OptimizerHints):
         "bigint": Integer,
         "smallint": Integer,
         "tinyint": Integer,
+        "mediumint": Integer,
         # Text
         "varchar": Text,
         "char": Text,
