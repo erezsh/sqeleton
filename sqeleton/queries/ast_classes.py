@@ -222,6 +222,7 @@ class LazyOps:
     def __eq__(self, other):
         if other is None:
             return BinBoolOp("IS", [self, None])
+
         return BinBoolOp("=", [self, other])
 
     def __lt__(self, other):
