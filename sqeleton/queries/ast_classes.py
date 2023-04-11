@@ -22,7 +22,7 @@ class QB_TypeError(QueryBuilderError):
     pass
 
 
-class ExprNode(Compilable):
+class CompilableNode(Compilable):
     "Base class for query expression nodes"
 
     type: Any = None
@@ -39,6 +39,8 @@ class ExprNode(Compilable):
                 if isinstance(v, ExprNode):
                     yield from v._dfs_values()
 
+class ExprNode(CompilableNode):
+    "Base class for query expression nodes"
     def cast_to(self, to):
         return Cast(self, to)
 
@@ -91,7 +93,7 @@ class ITable(AbstractTable):
     source_table: Any
     schema: Schema = None
 
-    def select(self, *exprs, distinct=SKIP, optimizer_hints=SKIP, **named_exprs) -> "ITable":
+    def select(self, *exprs, distinct=SKIP, optimizer_hints=SKIP, **named_exprs) -> "Select":
         """Create a new table with the specified fields"""
         exprs = args_as_tuple(exprs)
         exprs = _drop_skips(exprs)
@@ -100,7 +102,7 @@ class ITable(AbstractTable):
         resolve_names(self.source_table, exprs)
         return Select.make(self, columns=exprs, distinct=distinct, optimizer_hints=optimizer_hints)
 
-    def where(self, *exprs):
+    def where(self, *exprs) -> "Select":
         exprs = args_as_tuple(exprs)
         exprs = _drop_skips(exprs)
         if not exprs:
@@ -243,11 +245,21 @@ class LazyOps:
     def like(self, other):
         return BinBoolOp("LIKE", [self, other])
 
+    def in_(self, *others):
+        others = args_as_tuple(others)
+        assert isinstance(others, tuple), f"Only lists of constants are supported for now, not {others}"
+        if len(others) == 1 and isinstance(others[0], ExprTable):
+            return InTable(self, others[0])
+        return In(self, others)
+
     def test_regex(self, other):
         return TestRegex(self, other)
 
     def sum(self):
         return Func("SUM", [self])
+
+    def count(self):
+        return Func("COUNT", [self])
 
     def max(self):
         return Func("MAX", [self])
@@ -415,8 +427,11 @@ class Column(ExprNode, LazyOps):
         return c.quote(self.name)
 
 
+class ExprTable(ExprNode, ITable):
+    pass
+
 @dataclass
-class TablePath(ExprNode, ITable):
+class TablePath(ExprTable):
     path: DbPath
     schema: Optional[Schema] = field(default=None, repr=False)
 
@@ -457,6 +472,15 @@ class TablePath(ExprNode, ITable):
         """Returns a query expression to truncate the table. (remove all rows)"""
         return TruncateTable(self)
 
+    def delete_rows(self, *where_exprs: Expr):
+        where_exprs = args_as_tuple(where_exprs)
+        where_exprs = _drop_skips(where_exprs)
+        if not where_exprs:
+            return self
+
+        resolve_names(self.source_table, where_exprs)
+        return DeleteFromTable(self, where_exprs)
+
     def insert_rows(self, rows: Sequence, *, columns: List[str] = None):
         """Returns a query expression to insert rows to the table, given as Python values.
 
@@ -465,15 +489,30 @@ class TablePath(ExprNode, ITable):
             columns: Names of columns being populated. If specified, must have the same length as the tuples.
         """
         rows = list(rows)
+        if rows and isinstance(rows[0], dict):
+            keys = list(rows[0].keys())
+            if columns is None:
+                columns = keys
+            elif not(set(columns) <= set(rows[0].keys())):
+                raise ValueError("Keys in dictionary are not a subset of 'columns'")
+            rows = [[row[k] for k in columns] for row in rows]
+
         return InsertToTable(self, ConstantTable(rows), columns=columns)
 
-    def insert_row(self, *values, columns: List[str] = None):
+    def insert_row(self, *values, columns: List[str] = None, **kw):
         """Returns a query expression to insert a single row to the table, given as Python values.
 
         Parameters:
             columns: Names of columns being populated. If specified, must have the same length as 'values'
         """
-        return InsertToTable(self, ConstantTable([values]), columns=columns)
+        if (not values) == (not kw):
+            raise ValueError("Must provide either positional arguments or keyword arguments, but not a mix of both.")
+        if values:
+            return InsertToTable(self, ConstantTable([values]), columns=columns)
+
+        assert kw
+        assert not columns
+        return InsertToTable(self, ConstantTable([list(kw.values())]), columns=list(kw.keys()))
 
     def insert_expr(self, expr: Expr):
         """Returns a query expression to insert rows to the table, given as a query expression.
@@ -545,7 +584,7 @@ class Join(ExprNode, ITable, Root):
 
         return self.replace(on_exprs=(self.on_exprs or []) + exprs)
 
-    def select(self, *exprs, **named_exprs) -> ITable:
+    def select(self, *exprs, **named_exprs) -> "Join":
         """Select fields to return from the JOIN operation
 
         See Also: ``ITable.select()``
@@ -680,7 +719,7 @@ class TableOp(ExprNode, ITable, Root):
 
 
 @dataclass
-class Select(ExprNode, ITable, Root):
+class Select(ExprTable, Root):
     table: Expr = None
     columns: Sequence[Expr] = None
     where_exprs: Sequence[Expr] = None
@@ -817,11 +856,12 @@ class _ResolveColumn(ExprNode, LazyOps):
 
     def resolve(self, expr: Expr):
         if self.resolved is not None:
-            raise QueryBuilderError("Already resolved!")
+            raise QueryBuilderError(f"Column '{self.resolve_name}' Already resolved! To value: {self.resolved}")
         self.resolved = expr
 
     def _get_resolved(self) -> Expr:
         if self.resolved is None:
+            breakpoint()
             raise QueryBuilderError(f"Column not resolved: {self.resolve_name}")
         return self.resolved
 
@@ -862,6 +902,16 @@ class In(ExprNode):
     def compile(self, c: Compiler):
         elems = ", ".join(map(c.compile, self.list))
         return f"({c.compile(self.expr)} IN ({elems}))"
+
+@dataclass
+class InTable(ExprNode):
+    expr: Expr
+    source_table: ExprTable
+
+    type = bool
+
+    def compile(self, c: Compiler):
+        return f"({c.compile(self.expr)} IN ({self.source_table.compile(c.replace(in_select=False))}))"
 
 
 @dataclass
@@ -929,7 +979,7 @@ class TimeTravel(ITable):
 # DDL
 
 
-class Statement(Compilable, Root):
+class Statement(CompilableNode, Root):
     type = None
 
 
@@ -971,6 +1021,17 @@ class TruncateTable(Statement):
     def compile(self, c: Compiler) -> str:
         return f"TRUNCATE TABLE {c.compile(self.path)}"
 
+
+@dataclass
+class DeleteFromTable(Statement):
+    path: TablePath
+    where_exprs: Sequence[Expr] = None
+
+    def compile(self, c: Compiler) -> str:
+        delete = f"DELETE FROM {c.compile(self.path)}"
+        if self.where_exprs:
+            delete += " WHERE " + " AND ".join(map(c.compile, self.where_exprs))
+        return delete
 
 @dataclass
 class InsertToTable(Statement):

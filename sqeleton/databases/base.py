@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, date
 import math
 import sys
 import logging
@@ -14,7 +14,7 @@ from runtype import dataclass
 
 from ..utils import is_uuid, safezip, Self
 from ..queries import Expr, Compiler, table, Select, SKIP, Explain, Code, this
-from ..queries.ast_classes import Random
+from ..queries.ast_classes import Random, CompilableNode
 from ..abcs.database_types import (
     AbstractDatabase,
     T_Dialect,
@@ -186,6 +186,8 @@ class BaseDialect(AbstractDialect):
             return f"'{v}'"
         elif isinstance(v, datetime):
             return self.timestamp_value(v)
+        elif isinstance(v, date):
+            return self._constant_value(str(v))
         elif isinstance(v, UUID):
             return f"'{v}'"
         elif isinstance(v, decimal.Decimal):
@@ -320,7 +322,7 @@ class Database(AbstractDatabase[T]):
         compiler = Compiler(self)
         return compiler.compile(sql_ast)
 
-    def query(self, sql_ast: Union[Expr, Generator], res_type: type = None):
+    def query(self, sql_ast: Union[Expr, CompilableNode, Generator, Sequence[CompilableNode]], res_type: type = None):
         """Query the given SQL code/AST, and attempt to convert the result to type 'res_type'
 
         If given a generator, it will execute all the yielded sql queries with the same thread and cursor.
@@ -346,6 +348,7 @@ class Database(AbstractDatabase[T]):
                     return SKIP
 
             logger.debug("Running SQL (%s): %s", self.name, sql_code)
+            print("Running SQL (%s): %s" % (self.name, sql_code))
 
         if self._interactive and isinstance(sql_ast, Select):
             explained_sql = compiler.compile(Explain(sql_ast))
@@ -362,7 +365,7 @@ class Database(AbstractDatabase[T]):
         res = self._query(sql_code)
         if res_type is list:
             return list(res)
-        elif res_type is int:
+        elif res_type in (int, str):
             if not res:
                 raise ValueError("Query returned 0 rows, expected 1")
             row = _one(res)
@@ -371,7 +374,7 @@ class Database(AbstractDatabase[T]):
             res = _one(row)
             if res is None:  # May happen due to sum() of 0 items
                 return None
-            return int(res)
+            return res_type(res)
         elif res_type is datetime:
             res = _one(_one(res))
             if isinstance(res, str):
