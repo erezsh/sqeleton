@@ -158,6 +158,11 @@ sql_keywords = [
 ]
 sql_completer = WordCompleter(sql_keywords, ignore_case=True)
 
+def add_keywords(new_keywords):
+    global sql_keywords
+    new = set(new_keywords) - set(sql_keywords)
+    sql_keywords += new
+
 
 def _code_is_valid(code: str):
     if code:
@@ -234,7 +239,6 @@ def help():
 
 
 def run_command(db, q):
-    global sql_keywords
     if q.startswith("*"):
         pattern = q[1:]
         try:
@@ -243,7 +247,7 @@ def run_command(db, q):
             logging.error(e)
         else:
             print_table(names, ["name"], "List of tables")
-            sql_keywords += [".".join(n) for n in names]
+            add_keywords([".".join(n) for n in names])
     elif q.startswith("?"):
         table_name = q[1:]
         if not table_name:
@@ -257,7 +261,7 @@ def run_command(db, q):
             logging.error(e)
         else:
             print_table([(k, v[1]) for k, v in schema.items()], ["name", "type"], f"Table '{table_name}'")
-            sql_keywords += schema.keys()
+            add_keywords(schema.keys())
     else:
         # Normal SQL query
         try:
@@ -267,7 +271,7 @@ def run_command(db, q):
         else:
             if res:
                 print_table(res.rows, res.columns, None)
-                sql_keywords += res.columns
+                add_keywords(res.columns)
 
 
 def main():
