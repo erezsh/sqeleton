@@ -1,8 +1,9 @@
 from dataclasses import field
 from datetime import datetime
 from typing import Any, Generator, List, Optional, Sequence, Union, Dict
+from collections import ChainMap
 
-from runtype import dataclass
+from runtype import dataclass as _dataclass, cv_type_checking
 
 from ..utils import join_iter, ArithString
 from ..abcs import Compilable
@@ -21,6 +22,7 @@ class QueryBuilderError(SqeletonError):
 class QB_TypeError(QueryBuilderError):
     pass
 
+dataclass = _dataclass(eq=False, order=False)
 
 class CompilableNode(Compilable):
     "Base class for query expression nodes"
@@ -222,6 +224,9 @@ class LazyOps:
         return BinBoolOp(">=", [self, other])
 
     def __eq__(self, other):
+        if cv_type_checking.get():
+            return super().__eq__(other)
+
         if other is None:
             return BinBoolOp("IS", [self, None])
 
@@ -280,7 +285,7 @@ class TestRegex(ExprNode, LazyOps):
         return c.compile(regex)
 
 
-@dataclass(eq=False)
+@dataclass
 class Func(ExprNode, LazyOps):
     name: str
     args: Sequence[Expr]
@@ -358,7 +363,7 @@ class QB_When:
         return self.casewhen.replace(cases=self.casewhen.cases + [case])
 
 
-@dataclass(eq=False, order=False)
+@_dataclass(eq=False, order=False)
 class IsDistinctFrom(ExprNode, LazyOps):
     a: Expr
     b: Expr
@@ -368,7 +373,7 @@ class IsDistinctFrom(ExprNode, LazyOps):
         return c.dialect.is_distinct_from(c.compile(self.a), c.compile(self.b))
 
 
-@dataclass(eq=False, order=False)
+@_dataclass(eq=False, order=False)
 class BinOp(ExprNode, LazyOps):
     op: str
     args: Sequence[Expr]
@@ -399,7 +404,7 @@ class BinBoolOp(BinOp):
     type = bool
 
 
-@dataclass(eq=False, order=False)
+@_dataclass(eq=False, order=False)
 class Column(ExprNode, LazyOps):
     source_table: ITable
     name: str
@@ -442,6 +447,11 @@ class TablePath(ExprTable):
     def compile(self, c: Compiler) -> str:
         path = self.path  # c.database._normalize_table_path(self.name)
         return ".".join(map(c.quote, path))
+
+    def __repr__(self) -> str:
+        if self.schema:
+            return f"TablePath({self.path!r}, schema=<{len(self.schema)} cols>)"
+        return f"TablePath({self.path!r})"
 
     # Statement shorthands
     def create(self, source_table: ITable = None, *, if_not_exists: bool = False, primary_keys: List[str] = None):
@@ -567,7 +577,11 @@ class Join(ExprNode, ITable, Root):
 
     @property
     def schema(self):
-        assert self.columns  # TODO Implement SELECT *
+        if self.columns is None:
+            schemas = [t.schema for t in self.source_tables if t.schema]
+            assert all(schemas)
+            return type(schemas[0])(ChainMap(*schemas))    # TODO merge dictionaries in compliance with SQL dialect!
+
         s = self.source_tables[0].schema  # TODO validate types match between both tables
         return type(s)({c.name: c.type for c in self.columns})
 
@@ -849,7 +863,7 @@ def resolve_names(source_table, exprs):
                     i += 1
 
 
-@dataclass(frozen=False, eq=False, order=False)
+@_dataclass(frozen=False, eq=False, order=False)
 class _ResolveColumn(ExprNode, LazyOps):
     resolve_name: str
     resolved: Expr = None
