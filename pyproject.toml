@@ -75,3 +75,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
 sqeleton = 'sqeleton.__main__:main'
+
+[tool.ruff]
+line-length = 120
+target-version = "py37"

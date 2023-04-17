@@ -73,7 +73,7 @@ def table(*path: str, schema: Union[dict, CaseAwareMapping] = None) -> TablePath
         schema = CaseSensitiveDict(schema)
     return TablePath(path, schema)
 
-def table_from_sqlmodel(cls: type):
+def table_from_sqlmodel(cls: type) -> TablePath:
     import sqlmodel
     assert issubclass(cls, sqlmodel.SQLModel)
     table_name = cls.__name__.lower()

@@ -8,7 +8,7 @@ from typing import (
     Dict,
     Hashable,
     TypeVar,
-    TYPE_CHECKING,
+    Generator,
     List,
 )
 from abc import abstractmethod
@@ -78,7 +78,7 @@ def is_uuid(u):
     return True
 
 
-def match_regexps(regexps: Dict[str, Any], s: str) -> Sequence[tuple]:
+def match_regexps(regexps: Dict[str, Any], s: str) -> Generator[tuple, None, None]:
     for regexp, v in regexps.items():
         m = re.match(regexp + "$", s)
         if m:
@@ -99,14 +99,14 @@ class CaseAwareMapping(MutableMapping[str, V]):
         return type(self)(initial)
 
 
-class CaseInsensitiveDict(CaseAwareMapping):
+class CaseInsensitiveDict(CaseAwareMapping[V]):
     def __init__(self, initial):
         self._dict = {k.lower(): (k, v) for k, v in dict(initial).items()}
 
     def __getitem__(self, key: str) -> V:
         return self._dict[key.lower()][1]
 
-    def __iter__(self) -> Iterator[V]:
+    def __iter__(self) -> Iterator[str]:
         return iter(self._dict)
 
     def __len__(self) -> int:

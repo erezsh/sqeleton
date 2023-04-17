@@ -115,7 +115,8 @@ class AbstractMixin_RandomSample(AbstractMixin):
 
     @abstractmethod
     def random_sample_ratio_approx(self, tbl: str, ratio: float) -> str:
-        """Take a random sample of the approximate size determined by the ratio (0..1), where 0 means no rows, and 1 means all rows
+        """Take a random sample of the approximate size determined by the ratio (0..1),
+        ratio of 0 means no rows, and 1 means all rows
 
         i.e. the actual mount of rows returned may vary by standard deviation.
         """

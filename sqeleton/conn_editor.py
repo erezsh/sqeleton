@@ -14,7 +14,7 @@ except ModuleNotFoundError:
 
 from textual.app import App, ComposeResult
 from textual.containers import Vertical, Container, Horizontal
-from textual.widgets import Header, Footer, Input, Label, Button, Static, ListView, ListItem
+from textual.widgets import Header, Footer, Input, Label, Button, ListView, ListItem
 
 from textual_select import Select
 

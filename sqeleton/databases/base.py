@@ -2,7 +2,7 @@ from datetime import datetime, date
 import math
 import sys
 import logging
-from typing import Any, Callable, Dict, Generator, Tuple, Optional, Sequence, Type, List, Union, TypeVar, TYPE_CHECKING
+from typing import Any, Callable, Dict, Generator, Tuple, Optional, Sequence, Type, List, Union, TypeVar, TYPE_CHECKING, Type
 from functools import partial, wraps
 from concurrent.futures import ThreadPoolExecutor
 import threading
@@ -280,6 +280,7 @@ class BaseDialect(AbstractDialect):
 
 
 T = TypeVar("T", bound=BaseDialect)
+TRes = TypeVar("TRes")
 
 
 @dataclass
@@ -322,7 +323,7 @@ class Database(AbstractDatabase[T]):
         compiler = Compiler(self)
         return compiler.compile(sql_ast)
 
-    def query(self, sql_ast: Union[Expr, CompilableNode, Generator, Sequence[CompilableNode]], res_type: type = None):
+    def query(self, sql_ast: Union[Expr, CompilableNode, Generator, Sequence[CompilableNode]], res_type: Type[TRes] = None) -> TRes:
         """Query the given SQL code/AST, and attempt to convert the result to type 'res_type'
 
         If given a generator, it will execute all the yielded sql queries with the same thread and cursor.
@@ -509,11 +510,11 @@ class Database(AbstractDatabase[T]):
     def parse_table_name(self, name: str) -> DbPath:
         return parse_table_name(name)
 
-    def _query_cursor(self, c, sql_code: str) -> QueryResult:
+    def _query_cursor(self, c, sql_code: str) -> Optional[QueryResult]:
         assert isinstance(sql_code, str), sql_code
         try:
             c.execute(sql_code)
-            if sql_code.lower().startswith(("select", "explain", "show")):
+            if sql_code.lstrip().lower().startswith(("select", "explain", "show")):
                 columns = [col[0] for col in c.description]
                 return QueryResult(c.fetchall(), columns)
         except Exception as _e:
