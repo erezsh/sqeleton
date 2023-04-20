@@ -4,7 +4,7 @@ Sqeleton is a Python library for querying SQL databases.
 
 It has two complementary APIs:
 
-1. [Database interface](#database-interface), for connecting and querying.
+1. [Database interface](#database-interface), for connecting to a database and querying it.
 
 2. [Query builder](#query-builder), for constructing query expressions (ASTs).
 
@@ -12,9 +12,9 @@ The following sections delve into each one of them.
 
 ## Database Interface
 
-Sqeleton's database interface enables provides a unified interface for accessing a wide array of databases.
+Sqeleton's database interface enables a unified interface for accessing a wide array of databases.
 
-Each database has its own dialect, which tells the compiler which SQL to produce for each expression.  Extra features can be added to the dialect using [mixins](#database-mixins).
+Each database in Sqeleton has a dialect, which tells the compiler which SQL code to produce for each expression.  Extra features can be added to the dialect using [mixins](#database-mixins).
 
 ### connect()
 
@@ -94,7 +94,7 @@ Sqeleton's query-builder takes a lot of ideas from both SQLAlchemy and PyPika, h
 
 ### table()
 
-To query tables, users create a table instance, and use chain methods to build the query expression:
+To query tables, users create a table instance, and chain methods calls to build the query expression:
 
 ```python
 >>> from sqeleton import table

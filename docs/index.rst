@@ -22,7 +22,7 @@ It consists of -
 
 It is comparable to other libraries such as SQLAlchemy or PyPika, in terms of API and intended audience. However there are several notable ways in which it is different.
 
-For more information, `See our README <https://github.com/datafold/sqeleton#readme>`_
+For more information, `See our README <https://github.com/erezsh/sqeleton#readme>`_
 
 
 Resources
@@ -33,5 +33,5 @@ Resources
 - :doc:`supported-databases`
 - :doc:`conn_editor`
 - :doc:`python-api`
-- Source code (git): `<https://github.com/datafold/sqeleton>`_
+- Source code (git): `<https://github.com/erezsh/sqeleton>`_
 

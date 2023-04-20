@@ -106,6 +106,9 @@ result = ddb.query(queries, int)
 print(f"Total sum of 0..100 = {result}")
 ```
 
+# Sponsors
+
+Special thanks to Datafold for having sponsored Sqeleton in its initial stages.
 
 # TODO
 
