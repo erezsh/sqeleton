@@ -17,8 +17,8 @@ It is comparable to other libraries such as SQLAlchemy or PyPika, in terms of AP
 
 🏃‍♂️**High-performance**: Sqeleton's API is designed to maximize performance using batch operations
 
-- No ORM - ORMs are easy and familiar, but their granular operations are too slow.
-- Compiles the queries 4 times faster than SQLAlchemy
+- No ORM! While ORMs are easy and familiar, their granular operations are far too slow.
+- Compiles queries 4 times faster than SQLAlchemy
 
 🙌**Parallel**: Seamless multi-threading and multi-processing support
 
@@ -46,7 +46,9 @@ _Databases we fully support_:
 - DuckDB >=0.6
 - SQLite (coming soon)
 
-💻**Built-in SQL client**: Connect to any of the supported databases with just one line. e.g. `sqeleton repl snowflake://...`
+💻**Built-in SQL client**: Connect to any of the supported databases with just one line.
+
+Example usage: `sqeleton repl snowflake://...`
 
 - Has syntax-highlighting, and autocomplete
 - Use `*text` to find all tables like `%text%` (or just `*` to see all tables)
