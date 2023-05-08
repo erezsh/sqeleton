@@ -11,7 +11,6 @@ classifiers = [
     "Intended Audience :: Developers",
     "Intended Audience :: Information Technology",
     "Intended Audience :: System Administrators",
-    "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
@@ -23,7 +22,7 @@ classifiers = [
 packages = [{ include = "sqeleton" }]
 
 [tool.poetry.dependencies]
-python = "^3.7"
+python = "^3.8"
 runtype = "^0.3.2"
 dsnparse = "*"
 click = "^8.1"
@@ -78,4 +77,4 @@ sqeleton = 'sqeleton.__main__:main'
 
 [tool.ruff]
 line-length = 120
-target-version = "py37"
+target-version = "py38"
