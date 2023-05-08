@@ -1,45 +1,34 @@
 # Sqeleton
 
-**Under construction!**
+**Note: Sqeleton is still under construction. Many details are open to change.**
 
 Sqeleton is a Python library for querying SQL databases.
 
 It consists of -
 
-- A fast and concise query builder, inspired by PyPika and SQLAlchemy
+- A fast and concise query builder, designed from scratch, but inspired by PyPika and SQLAlchemy
 
 - A modular database interface, with drivers for a long list of SQL databases.
 
-It is comparable to other libraries such as SQLAlchemy or PyPika, in terms of API and intended audience. However there are several notable ways in which it is different.
+It is comparable to other libraries such as SQLAlchemy or PyPika, in terms of API and intended audience. However, there are several notable ways in which it is different. 
 
-## Overview
 
-### Built for performance
+## **Features:**
 
-- Multi-threaded by default -
-    The same connection object can be used from multiple threads without any additional setup.
+🏃‍♂️**Fast**: Sqeleton's API is designed to maximize performance using batch operations
+    - No ORM - ORMs are easy and familiar, but their granular operations are too slow.
+    - Compiles the queries 4 times faster than SQLAlchemy
 
-- No ORM
-    ORMs are easy and familiar, but they encourage bad and slow code. Sqeleton is designed to push the compute to SQL.
+🙌**Parallel**: Seamless multi-threading and multi-processing support
 
-- Fast query-builder
-    Sqeleton's query-builder runs about 4 times faster than SQLAlchemy's.
+💖**Well-tested**: In addition to having an extensive test-suite, sqeleton is used as the core of [data-diff](https://github.com/datafold/data-diff).
 
-### Type-aware
+✅**Type-aware**: The schema is used for validation when building expressions, making sure the names are correct, and that the data-types align. (WIP)
+    - The schema can be queried at run-time, if the tables already exist in the database
 
-Sqeleton has a built-in feature to query the schemas of the databases it supports.
+✨**Multi-database access**: Sqeleton is designed to work with several databases at the same time. Its API abstracts away as many implementation details as possible.
 
-This feature can be also used to inform the query-builder, either as an alternative to defining the tables yourself, or to validate that your definitions match the actual schema.
-
-The schema is used for validation when building expressions, making sure the names are correct, and that the data-types align.
-
-(Still WIP)
-
-### Multi-database access
-
-Sqeleton is designed to work with several databases at the same time. Its API abstracts away as many implementation details as possible.
-
-Databases we fully support:
+_Databases we fully support_:
 
 - PostgreSQL >=10
 - MySQL
@@ -54,6 +43,11 @@ Databases we fully support:
 - Vertica
 - DuckDB >=0.6
 - SQLite (coming soon)
+
+💻**Built-in SQL client**: Connect to any of the supported databases with just one line. e.g. `sqeleton repl snowflake://...`
+    - Has syntax-highlighting, and autocomplete
+    - Use `*text` to find all tables like `%text%` (or just `*` to see all tables)
+    - Use `?name` to see the schema of the table called `name`.
 
 ## Documentation
 
@@ -108,7 +102,7 @@ print(f"Total sum of 0..100 = {result}")
 
 # Sponsors
 
-Special thanks to Datafold for having sponsored Sqeleton in its initial stages.
+Special thanks to Datafold for having sponsored Sqeleton in its initial stages. For reference, [the original repo](https://github.com/datafold/sqeleton/).
 
 # TODO
 

@@ -25,9 +25,10 @@ from prompt_toolkit.output.color_depth import ColorDepth
 from prompt_toolkit.completion import WordCompleter
 from prompt_toolkit.styles.pygments import style_from_pygments_cls
 
+from . import __version__
+
 STYLE = style_from_pygments_cls(get_style_by_name("dracula"))
 
-__version__ = "?"
 
 
 sql_keywords = [
@@ -173,7 +174,7 @@ def _code_is_valid(code: str):
 
 
 def repl(uri, prompt=" >> "):
-    rich.print(f"[purple]Sqeleton {__version__} interactive prompt. Type help() for help[/purple]")
+    rich.print(f"[purple]Sqeleton {__version__} interactive prompt. Enter '?' for help[/purple]")
 
     db = connect(uri)
     db_name = db.name
