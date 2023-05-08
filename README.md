@@ -73,6 +73,8 @@ Read more in [install / getting started.](https://sqeleton.readthedocs.io/en/lat
 
 ### Basic usage
 
+We will create a table with the numbers 0..100, and then sum them up.
+
 ```python
 from sqeleton import connect, table, this
 
@@ -99,6 +101,65 @@ result = ddb.query(queries, int)
 # Prints: Total sum of 0..100 = 4950
 print(f"Total sum of 0..100 = {result}")
 ```
+
+### Advanced usage
+
+We will define a function that performs outer-join on any database, and adds two extra fields: `only_a` and `only_b`.
+
+```python
+from sqeleton.databases import Database
+from sqeleton.queries import ITable, leftjoin, rightjoin, outerjoin, and_
+
+def my_outerjoin(
+        db: Database,
+        a: ITable, b: ITable,
+        keys1: List[str], keys2: List[str],
+        select_fields: dict
+    ) -> ITable:
+    """This function accepts two table expressions, and returns an outer-join query.
+    
+    The resulting rows will include two extra boolean fields:
+    "only_a", and "only_b", describing whether there was a match for that row 
+    only in the first table, or only in the second table.
+
+    Parameters:
+        db - the database connection to use
+        a, b - the tables to outer-join
+        keys1, keys2 - the names of the columns to join on, for each table respectively
+        select_fields - A dictionary of {column_name: expression} to select as a result of the outer-join
+    """
+    # Predicates to join on
+    on = [a[k1] == b[k2] for k1, k2 in zip(keys1, keys2)]
+
+    # Define the new boolean fields
+    # If all keys are None, it means there was no match
+    # Compiles to "<k1> IS NULL AND <k2> IS NULL AND <k3> IS NULL..." etc.
+    only_a = and_(b[k] == None for k in keys2)
+    only_b = and_(a[k] == None for k in keys1)
+
+    if isinstance(db, MySQL):
+        # MySQL doesn't support "outer join"
+        # Instead, we union "left join" and "right join"
+        l = leftjoin(a, b).on(*on).select(
+                only_a=only_a,
+                only_b=False,
+                **select_fields
+            )
+        r = rightjoin(a, b).on(*on).select(
+                only_a=False,
+                only_b=only_b,
+                **select_fields
+            )
+        return l.union(r)
+
+    # Other databases
+    return outerjoin(a, b).on(*on).select(
+            only_a=only_a,
+            only_b=only_b,
+            **select_fields
+        )
+```
+
 
 # Sponsors
 

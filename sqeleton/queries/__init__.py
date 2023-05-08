@@ -21,5 +21,5 @@ from .api import (
     current_timestamp,
     code,
 )
-from .ast_classes import Expr, ExprNode, Select, Count, BinOp, Explain, In, Code, Column
+from .ast_classes import Expr, ExprNode, Select, Count, BinOp, Explain, In, Code, Column, ITable
 from .extras import Checksum, NormalizeAsString, ApplyFuncAndNormalizeAsString
