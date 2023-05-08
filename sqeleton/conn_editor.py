@@ -249,9 +249,6 @@ class ConnectionEditor(App):
         """An action to toggle dark mode."""
         self.dark = not self.dark
 
-    def action_test_all_conns(self):
-        return self.action_quit()
-
     def action_add_conn(self):
         self.edit_swapper.new_content(EditConnection("New", self.config))
 

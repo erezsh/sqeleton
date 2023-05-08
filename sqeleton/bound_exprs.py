@@ -76,7 +76,7 @@ def bound_table(database: AbstractDatabase, table_path: Union[TablePath, str, tu
     return BoundTable(database, table(table_path, **kw))
 
 
-
 if TYPE_CHECKING:
+
     class BoundTable(BoundTable, TablePath):
         pass

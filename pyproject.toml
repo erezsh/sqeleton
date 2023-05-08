@@ -24,7 +24,7 @@ packages = [{ include = "sqeleton" }]
 
 [tool.poetry.dependencies]
 python = "^3.7"
-runtype = "^0.2.6"
+runtype = "^0.3.2"
 dsnparse = "*"
 click = "^8.1"
 rich = "*"

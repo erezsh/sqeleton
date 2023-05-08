@@ -131,8 +131,6 @@ class TestQuery(unittest.TestCase):
         self.assertRaises(KeyError, j.__getitem__, "ysum")
 
     def test_commutable_select(self):
-        # c = Compiler(MockDatabase())
-
         t = table("a")
         q1 = t.select("a").where("b")
         q2 = t.where("b").select("a")

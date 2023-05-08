@@ -22,7 +22,9 @@ class QueryBuilderError(SqeletonError):
 class QB_TypeError(QueryBuilderError):
     pass
 
+
 dataclass = _dataclass(eq=False, order=False)
+
 
 class CompilableNode(Compilable):
     "Base class for query expression nodes"
@@ -41,8 +43,10 @@ class CompilableNode(Compilable):
                 if isinstance(v, ExprNode):
                     yield from v._dfs_values()
 
+
 class ExprNode(CompilableNode):
     "Base class for query expression nodes"
+
     def cast_to(self, to):
         return Cast(self, to)
 
@@ -253,7 +257,9 @@ class LazyOps:
     def in_(self, *others):
         others = args_as_tuple(others)
         assert isinstance(others, tuple), f"Only lists of constants are supported for now, not {others}"
-        if len(others) == 1 and isinstance(others[0], ExprTable):
+        if len(others) == 0:
+            return False  # SQL value
+        elif len(others) == 1 and isinstance(others[0], ExprTable):
             return InTable(self, others[0])
         return In(self, others)
 
@@ -435,6 +441,7 @@ class Column(ExprNode, LazyOps):
 class ExprTable(ExprNode, ITable):
     pass
 
+
 @_dataclass
 class TablePath(ExprTable):
     path: DbPath
@@ -491,6 +498,13 @@ class TablePath(ExprTable):
         resolve_names(self.source_table, where_exprs)
         return DeleteFromTable(self, where_exprs)
 
+    def update_fields(self, *where_exprs: Expr, **kv):
+        where_exprs = args_as_tuple(where_exprs)
+        where_exprs = _drop_skips(where_exprs)
+        resolve_names(self.source_table, where_exprs)
+        resolve_names(self.source_table, kv.values())
+        return UpdateTable(self, kv, where_exprs)
+
     def insert_rows(self, rows: Sequence, *, columns: List[str] = None):
         """Returns a query expression to insert rows to the table, given as Python values.
 
@@ -498,12 +512,16 @@ class TablePath(ExprTable):
             rows: A list of tuples. Must all have the same width.
             columns: Names of columns being populated. If specified, must have the same length as the tuples.
         """
+        # TODO support expressions (now, random, etc.)
         rows = list(rows)
-        if rows and isinstance(rows[0], dict):
+        if not rows:
+            return SKIP
+
+        if isinstance(rows[0], dict):
             keys = list(rows[0].keys())
             if columns is None:
                 columns = keys
-            elif not(set(columns) <= set(rows[0].keys())):
+            elif not (set(columns) <= set(rows[0].keys())):
                 raise ValueError("Keys in dictionary are not a subset of 'columns'")
             rows = [[row[k] for k in columns] for row in rows]
 
@@ -580,7 +598,7 @@ class Join(ExprNode, ITable, Root):
         if self.columns is None:
             schemas = [t.schema for t in self.source_tables if t.schema]
             assert all(schemas)
-            return type(schemas[0])(ChainMap(*schemas))    # TODO merge dictionaries in compliance with SQL dialect!
+            return type(schemas[0])(ChainMap(*schemas))  # TODO merge dictionaries in compliance with SQL dialect!
 
         s = self.source_tables[0].schema  # TODO validate types match between both tables
         return type(s)({c.name: c.type for c in self.columns})
@@ -806,7 +824,7 @@ class Select(ExprTable, Root):
             kwargs["optimizer_hints"] = optimizer_hints
 
         if distinct is not SKIP:
-            if distinct == False and table.distinct:
+            if distinct is False and table.distinct:
                 return cls(table, **kwargs)
             kwargs["distinct"] = distinct
 
@@ -917,6 +935,7 @@ class In(ExprNode):
         elems = ", ".join(map(c.compile, self.list))
         return f"({c.compile(self.expr)} IN ({elems}))"
 
+
 @dataclass
 class InTable(ExprNode):
     expr: Expr
@@ -953,7 +972,8 @@ class ConstantTable(ExprNode):
         raise NotImplementedError()
 
     def compile_for_insert(self, c: Compiler):
-        return c.dialect.constant_values(self.rows)
+        compiled_rows = [[c.compile(v) for v in r] for r in self.rows]
+        return c.dialect.immediate_values(compiled_rows)
 
 
 @dataclass
@@ -1046,6 +1066,22 @@ class DeleteFromTable(Statement):
         if self.where_exprs:
             delete += " WHERE " + " AND ".join(map(c.compile, self.where_exprs))
         return delete
+
+
+@dataclass
+class UpdateTable(Statement):
+    path: TablePath
+    updates: Dict[str, Expr]
+    where_exprs: Sequence[Expr] = None
+
+    def compile(self, c: Compiler) -> str:
+        updates = [f"{k} = {c.compile(v)}" for k, v in self.updates.items()]
+        update = f"UPDATE {c.compile(self.path)} SET " + ", ".join(updates)
+
+        if self.where_exprs:
+            update += " WHERE " + " AND ".join(map(c.compile, self.where_exprs))
+        return update
+
 
 @dataclass
 class InsertToTable(Statement):

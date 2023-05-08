@@ -158,6 +158,7 @@ sql_keywords = [
 ]
 sql_completer = WordCompleter(sql_keywords, ignore_case=True)
 
+
 def add_keywords(new_keywords):
     global sql_keywords
     new = set(new_keywords) - set(sql_keywords)

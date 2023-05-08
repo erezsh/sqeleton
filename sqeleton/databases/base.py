@@ -1,14 +1,24 @@
-from datetime import datetime, date
+from datetime import datetime
 import math
 import sys
 import logging
-from typing import Any, Callable, Dict, Generator, Tuple, Optional, Sequence, Type, List, Union, TypeVar, TYPE_CHECKING, Type
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Generator,
+    Tuple,
+    Optional,
+    Sequence,
+    List,
+    Union,
+    TypeVar,
+    Type,
+)
 from functools import partial, wraps
 from concurrent.futures import ThreadPoolExecutor
 import threading
 from abc import abstractmethod
-from uuid import UUID
-import decimal
 
 from runtype import dataclass
 
@@ -17,7 +27,6 @@ from ..queries import Expr, Compiler, table, Select, SKIP, Explain, Code, this
 from ..queries.ast_classes import Random, CompilableNode
 from ..abcs.database_types import (
     AbstractDatabase,
-    T_Dialect,
     AbstractDialect,
     AbstractTable,
     ColType,
@@ -179,27 +188,8 @@ class BaseDialect(AbstractDialect):
     def explain_as_text(self, query: str) -> str:
         return f"EXPLAIN {query}"
 
-    def _constant_value(self, v):
-        if v is None:
-            return "NULL"
-        elif isinstance(v, str):
-            return f"'{v}'"
-        elif isinstance(v, datetime):
-            return self.timestamp_value(v)
-        elif isinstance(v, date):
-            return self._constant_value(str(v))
-        elif isinstance(v, UUID):
-            return f"'{v}'"
-        elif isinstance(v, decimal.Decimal):
-            return str(v)
-        elif isinstance(v, bytearray):
-            return f"'{v.decode()}'"
-        elif isinstance(v, Code):
-            return v.code
-        return repr(v)
-
-    def constant_values(self, rows) -> str:
-        values = ", ".join("(%s)" % ", ".join(self._constant_value(v) for v in row) for row in rows)
+    def immediate_values(self, rows) -> str:
+        values = ", ".join("(%s)" % ", ".join(row) for row in rows)
         return f"VALUES {values}"
 
     def type_repr(self, t) -> str:
@@ -323,13 +313,17 @@ class Database(AbstractDatabase[T]):
         compiler = Compiler(self)
         return compiler.compile(sql_ast)
 
-    def query(self, sql_ast: Union[Expr, CompilableNode, Generator, Sequence[CompilableNode]], res_type: Type[TRes] = None) -> TRes:
+    def query(
+        self, sql_ast: Union[Expr, CompilableNode, Generator, Sequence[CompilableNode]], res_type: Type[TRes] = None
+    ) -> TRes:
         """Query the given SQL code/AST, and attempt to convert the result to type 'res_type'
 
         If given a generator, it will execute all the yielded sql queries with the same thread and cursor.
         The results of the queries a returned by the `yield` stmt (using the .send() mechanism).
         It's a cleaner approach than exposing cursors, but may not be enough in all cases.
         """
+        if sql_ast is SKIP:
+            return
 
         compiler = Compiler(self)
         if isinstance(sql_ast, Generator):
@@ -385,14 +379,16 @@ class Database(AbstractDatabase[T]):
             assert len(res) == 1, (sql_code, res)
             return res[0]
         elif getattr(res_type, "__origin__", None) is list and len(res_type.__args__) == 1:
-            if res_type.__args__ in ((int,), (str,)):
+            if res_type.__args__ in ((int,), (str,), (float,)):
                 return [_one(row) for row in res]
             elif res_type.__args__ in [(Tuple,), (tuple,)]:
                 return [tuple(row) for row in res]
             elif res_type.__args__ == (dict,):
                 return [dict(safezip(res.columns, row)) for row in res]
             else:
-                raise ValueError(res_type)
+                (elem_type,) = res_type.__args__
+                return [elem_type(**dict(safezip(res.columns, row))) for row in res]
+                # raise ValueError(res_type)
         return res
 
     def enable_interactive(self):

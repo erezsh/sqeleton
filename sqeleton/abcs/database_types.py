@@ -222,7 +222,6 @@ class AbstractDialect(ABC):
         "Parse type info as returned by the database"
 
 
-
 T_Dialect = TypeVar("T_Dialect", bound=AbstractDialect)
 
 
