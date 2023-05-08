@@ -28,7 +28,7 @@ def join(*tables: ITable) -> Join:
     return Join(tables)
 
 
-def leftjoin(*tables: ITable):
+def leftjoin(*tables: ITable) -> Join:
     """Left-joins a sequence of table expressions.
 
     See Also: ``join()``
@@ -72,6 +72,15 @@ def table(*path: str, schema: Union[dict, CaseAwareMapping] = None) -> TablePath
         assert isinstance(schema, dict)
         schema = CaseSensitiveDict(schema)
     return TablePath(path, schema)
+
+
+def table_from_sqlmodel(cls: type) -> TablePath:
+    import sqlmodel
+
+    assert issubclass(cls, sqlmodel.SQLModel)
+    table_name = cls.__name__.lower()
+    schema = cls.__annotations__
+    return table(table_name, schema=schema)
 
 
 def or_(*exprs: Expr):

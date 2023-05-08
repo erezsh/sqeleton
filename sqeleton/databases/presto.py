@@ -92,15 +92,6 @@ class Dialect(BaseDialect, Mixin_Schema):
     def explain_as_text(self, query: str) -> str:
         return f"EXPLAIN (FORMAT TEXT) {query}"
 
-    def type_repr(self, t) -> str:
-        if isinstance(t, TimestampTZ):
-            return f"timestamp with time zone"
-
-        try:
-            return {float: "REAL"}[t]
-        except KeyError:
-            return super().type_repr(t)
-
     def timestamp_value(self, t: DbTime) -> str:
         return f"timestamp '{t.isoformat(' ')}'"
 
@@ -143,6 +134,16 @@ class Dialect(BaseDialect, Mixin_Schema):
 
     def current_timestamp(self) -> str:
         return "current_timestamp"
+
+    def type_repr(self, t) -> str:
+        if isinstance(t, TimestampTZ):
+            return f"timestamp with time zone"
+        try:
+            return {float: "REAL"}[t]
+        except KeyError:
+            pass
+
+        return super().type_repr(t)
 
 
 class Presto(Database):

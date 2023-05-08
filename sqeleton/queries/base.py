@@ -8,6 +8,9 @@ class _SKIP:
     def __repr__(self):
         return "SKIP"
 
+    def __deepcopy__(self, memo):
+        return self
+
 
 SKIP = _SKIP()
 

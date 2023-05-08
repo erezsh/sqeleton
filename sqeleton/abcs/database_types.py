@@ -1,6 +1,6 @@
 import decimal
 from abc import ABC, abstractmethod
-from typing import Sequence, Optional, Tuple, Union, Dict, List
+from typing import Sequence, Optional, Tuple, Union, Dict, List, TypeVar, Generic
 from datetime import datetime
 
 from runtype import dataclass
@@ -222,12 +222,15 @@ class AbstractDialect(ABC):
         "Parse type info as returned by the database"
 
 
-from typing import TypeVar, Generic
-
 T_Dialect = TypeVar("T_Dialect", bound=AbstractDialect)
 
 
 class AbstractDatabase(Generic[T_Dialect]):
+    @property
+    @abstractmethod
+    def name(self) -> str:
+        "The name of the database"
+
     @property
     @abstractmethod
     def dialect(self) -> T_Dialect:
@@ -326,7 +329,8 @@ class AbstractTable(ABC):
     def join(self, target) -> "AbstractTable":
         """Join the current table with the target table, returning a new table containing both side-by-side.
 
-        When joining, it's recommended to use explicit tables names, instead of `this`, in order to avoid potential name collisions.
+        When joining, it's recommended to use explicit tables names, instead of `this`,
+        in order to avoid potential name collisions.
 
         Example:
             ::
@@ -368,17 +372,17 @@ class AbstractTable(ABC):
         """SELECT count() FROM self"""
 
     @abstractmethod
-    def union(self, other: "ITable"):
+    def union(self, other: "AbstractTable"):
         """SELECT * FROM self UNION other"""
 
     @abstractmethod
-    def union_all(self, other: "ITable"):
+    def union_all(self, other: "AbstractTable"):
         """SELECT * FROM self UNION ALL other"""
 
     @abstractmethod
-    def minus(self, other: "ITable"):
+    def minus(self, other: "AbstractTable"):
         """SELECT * FROM self EXCEPT other"""
 
     @abstractmethod
-    def intersect(self, other: "ITable"):
+    def intersect(self, other: "AbstractTable"):
         """SELECT * FROM self INTERSECT other"""

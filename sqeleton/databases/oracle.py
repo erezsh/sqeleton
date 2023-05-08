@@ -131,9 +131,7 @@ class Dialect(BaseDialect, Mixin_Schema, Mixin_OptimizerHints):
             return super().type_repr(t)
 
     def constant_values(self, rows) -> str:
-        return " UNION ALL ".join(
-            "SELECT %s FROM DUAL" % ", ".join(self._constant_value(v) for v in row) for row in rows
-        )
+        return " UNION ALL ".join("SELECT %s FROM DUAL" % ", ".join(row) for row in rows)
 
     def explain_as_text(self, query: str) -> str:
         raise NotImplementedError("Explain not yet implemented in Oracle")

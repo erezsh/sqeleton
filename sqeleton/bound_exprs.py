@@ -7,7 +7,7 @@ from typing import Union, TYPE_CHECKING
 from runtype import dataclass
 
 from .abcs import AbstractDatabase, AbstractCompiler
-from .queries.ast_classes import ExprNode, ITable, TablePath, Compilable
+from .queries.ast_classes import ExprNode, TablePath, Compilable
 from .queries.api import table
 from .schema import create_schema
 
@@ -75,21 +75,6 @@ class BoundTable(BoundNode):  # ITable
 def bound_table(database: AbstractDatabase, table_path: Union[TablePath, str, tuple], **kw):
     return BoundTable(database, table(table_path, **kw))
 
-
-# Database.table = bound_table
-
-# def test():
-#     from . import connect
-#     from .queries.api import table
-#     d = connect("mysql://erez:qweqwe123@localhost/erez")
-#     t = table(('Rating',))
-
-#     b = BoundTable(d, t)
-#     b2 = b.with_schema()
-
-#     breakpoint()
-
-# test()
 
 if TYPE_CHECKING:
 

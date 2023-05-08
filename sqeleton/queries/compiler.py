@@ -1,6 +1,8 @@
 import random
-from datetime import datetime
+from datetime import datetime, date
 from typing import Any, Dict, Sequence, List
+from uuid import UUID
+import decimal
 
 from runtype import dataclass
 
@@ -58,14 +60,20 @@ class Compiler(AbstractCompiler):
             return "NULL"
         elif isinstance(elem, Compilable):
             return elem.compile(self.replace(root=False))
-        elif isinstance(elem, str):
+        elif isinstance(elem, (str, UUID)):
             return f"'{elem}'"
         elif isinstance(elem, (int, float)):
             return str(elem)
         elif isinstance(elem, datetime):
             return self.dialect.timestamp_value(elem)
+        elif isinstance(elem, date):
+            return self._compile(str(elem))
         elif isinstance(elem, bytes):
             return f"b'{elem.decode()}'"
+        elif isinstance(elem, bytearray):
+            return f"'{elem.decode()}'"
+        elif isinstance(elem, decimal.Decimal):
+            return str(elem)
         elif isinstance(elem, ArithString):
             return f"'{elem}'"
         assert False, elem

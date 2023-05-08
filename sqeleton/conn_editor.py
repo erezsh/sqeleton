@@ -14,7 +14,7 @@ except ModuleNotFoundError:
 
 from textual.app import App, ComposeResult
 from textual.containers import Vertical, Container, Horizontal
-from textual.widgets import Header, Footer, Input, Label, Button, Static, ListView, ListItem
+from textual.widgets import Header, Footer, Input, Label, Button, ListView, ListItem
 
 from textual_select import Select
 
@@ -248,9 +248,6 @@ class ConnectionEditor(App):
     def action_toggle_dark(self) -> None:
         """An action to toggle dark mode."""
         self.dark = not self.dark
-
-    def action_test_all_conns(self):
-        return self.action_quit()
 
     def action_add_conn(self):
         self.edit_swapper.new_content(EditConnection("New", self.config))
