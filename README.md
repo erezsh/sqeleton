@@ -182,3 +182,10 @@ Special thanks to Datafold for having sponsored Sqeleton in its initial stages. 
 - Compile control flow, functions
 
 - Define tables using type-annotated classes (SQLModel style)
+
+## Alternatives
+
+- [SQLAlchemy](https://www.sqlalchemy.org/)
+- [PyPika](https://github.com/kayak/pypika)
+- [PonyORM](https://ponyorm.org/)
+- [peewee](https://github.com/coleifer/peewee)
