@@ -15,16 +15,18 @@ It is comparable to other libraries such as SQLAlchemy or PyPika, in terms of AP
 
 ## **Features:**
 
-🏃‍♂️**Fast**: Sqeleton's API is designed to maximize performance using batch operations
-    - No ORM - ORMs are easy and familiar, but their granular operations are too slow.
-    - Compiles the queries 4 times faster than SQLAlchemy
+🏃‍♂️**High-performance**: Sqeleton's API is designed to maximize performance using batch operations
+
+- No ORM - ORMs are easy and familiar, but their granular operations are too slow.
+- Compiles the queries 4 times faster than SQLAlchemy
 
 🙌**Parallel**: Seamless multi-threading and multi-processing support
 
 💖**Well-tested**: In addition to having an extensive test-suite, sqeleton is used as the core of [data-diff](https://github.com/datafold/data-diff).
 
 ✅**Type-aware**: The schema is used for validation when building expressions, making sure the names are correct, and that the data-types align. (WIP)
-    - The schema can be queried at run-time, if the tables already exist in the database
+    
+- The schema can be queried at run-time, if the tables already exist in the database
 
 ✨**Multi-database access**: Sqeleton is designed to work with several databases at the same time. Its API abstracts away as many implementation details as possible.
 
@@ -45,9 +47,10 @@ _Databases we fully support_:
 - SQLite (coming soon)
 
 💻**Built-in SQL client**: Connect to any of the supported databases with just one line. e.g. `sqeleton repl snowflake://...`
-    - Has syntax-highlighting, and autocomplete
-    - Use `*text` to find all tables like `%text%` (or just `*` to see all tables)
-    - Use `?name` to see the schema of the table called `name`.
+
+- Has syntax-highlighting, and autocomplete
+- Use `*text` to find all tables like `%text%` (or just `*` to see all tables)
+- Use `?name` to see the schema of the table called `name`.
 
 ## Documentation
 
@@ -71,7 +74,7 @@ pip install 'sqeleton[mysql, postgresql]'
 
 Read more in [install / getting started.](https://sqeleton.readthedocs.io/en/latest/install.html)
 
-### Basic usage
+### Example: Basic usage
 
 We will create a table with the numbers 0..100, and then sum them up.
 
@@ -102,7 +105,7 @@ result = ddb.query(queries, int)
 print(f"Total sum of 0..100 = {result}")
 ```
 
-### Advanced usage
+### Example: Advanced usage
 
 We will define a function that performs outer-join on any database, and adds two extra fields: `only_a` and `only_b`.
 
