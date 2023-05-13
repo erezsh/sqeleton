@@ -343,7 +343,6 @@ class Database(AbstractDatabase[T]):
                     return SKIP
 
             logger.debug("Running SQL (%s): %s", self.name, sql_code)
-            print("Running SQL (%s): %s" % (self.name, sql_code))
 
         if self._interactive and isinstance(sql_ast, Select):
             explained_sql = compiler.compile(Explain(sql_ast))

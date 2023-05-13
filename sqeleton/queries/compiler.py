@@ -61,7 +61,8 @@ class Compiler(AbstractCompiler):
         elif isinstance(elem, Compilable):
             return elem.compile(self.replace(root=False))
         elif isinstance(elem, (str, UUID)):
-            return f"'{elem}'"
+            escaped = elem.replace("'", "''")
+            return f"'{escaped}'"
         elif isinstance(elem, (int, float)):
             return str(elem)
         elif isinstance(elem, datetime):

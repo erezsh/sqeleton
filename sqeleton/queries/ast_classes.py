@@ -597,7 +597,7 @@ class Join(ExprNode, ITable, Root):
     def schema(self):
         if self.columns is None:
             schemas = [t.schema for t in self.source_tables if t.schema]
-            assert all(schemas)
+            assert schemas and all(schemas)
             return type(schemas[0])(ChainMap(*schemas))  # TODO merge dictionaries in compliance with SQL dialect!
 
         s = self.source_tables[0].schema  # TODO validate types match between both tables
@@ -667,6 +667,11 @@ class GroupBy(ExprNode, ITable, Root):
     def source_table(self):
         return self
 
+    @property
+    def schema(self):
+        s = self.table.schema
+        return type(s)({c.name: c.type for c in self.keys + self.values})
+
     def __post_init__(self):
         assert self.keys or self.values
 
@@ -680,10 +685,14 @@ class GroupBy(ExprNode, ITable, Root):
         resolve_names(self.table, exprs)
         return self.replace(having_exprs=(self.having_exprs or []) + exprs)
 
-    def agg(self, *exprs):
+    def agg(self, *exprs, **named_exprs):
         """Select aggregated fields for the group-by."""
         exprs = args_as_tuple(exprs)
         exprs = _drop_skips(exprs)
+
+        named_exprs = _drop_skips_dict(named_exprs)
+        exprs += _named_exprs_as_aliases(named_exprs)
+
         resolve_names(self.table, exprs)
         return self.replace(values=(self.values or []) + exprs)
 
@@ -986,6 +995,7 @@ class Explain(ExprNode, Root):
         return c.dialect.explain_as_text(c.compile(self.select))
 
 
+@dataclass
 class CurrentTimestamp(ExprNode):
     type = datetime
 
