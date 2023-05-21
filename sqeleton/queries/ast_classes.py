@@ -765,6 +765,7 @@ class TableOp(ExprNode, ITable, Root):
 
 ellipsis = type(Ellipsis)
 
+
 @dataclass
 class Select(ExprTable, Root):
     table: Expr = None

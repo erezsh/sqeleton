@@ -30,7 +30,6 @@ from . import __version__
 STYLE = style_from_pygments_cls(get_style_by_name("dracula"))
 
 
-
 sql_keywords = [
     "abort",
     "action",
