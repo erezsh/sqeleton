@@ -2,11 +2,12 @@ from dataclasses import field
 from datetime import datetime
 from typing import Any, Generator, List, Optional, Sequence, Union, Dict, Literal
 from collections import ChainMap
+from functools import lru_cache
 
 from runtype import dataclass as _dataclass, cv_type_checking
 
 from ..utils import join_iter, ArithString
-from ..abcs import Compilable
+from ..abcs import AbstractCompiler, Compilable
 from ..abcs.database_types import AbstractTable
 from ..abcs.mixins import AbstractMixin_Regex, AbstractMixin_TimeTravel
 from ..schema import Schema
@@ -26,6 +27,13 @@ class QB_TypeError(QueryBuilderError):
 dataclass = _dataclass(eq=False, order=False)
 
 ellipsis = type(Ellipsis)
+
+
+def cache(user_function, /):
+    'Simple lightweight unbounded cache.  Sometimes called "memoize".'
+    # Taken from https://github.com/python/cpython/blob/3.11/Lib/functools.py
+    return lru_cache(maxsize=None)(user_function)
+
 
 
 class CompilableNode(Compilable):
@@ -179,6 +187,11 @@ class ITable(AbstractTable):
     def intersect(self, other: "ITable"):
         """SELECT * FROM self INTERSECT other"""
         return TableOp("INTERSECT", self, other)
+
+    def alias(self, name):
+        if isinstance(self, TableAlias):
+            return self.replace(name=name)
+        return TableAlias(self, name)
 
 
 @dataclass
@@ -437,12 +450,14 @@ class Column(ExprNode, LazyOps):
         if c._table_context:
             if len(c._table_context) > 1:
                 aliases = [
-                    t for t in c._table_context if isinstance(t, TableAlias) and t.source_table is self.source_table
+                    t for t in c._table_context if isinstance(t, TableAlias)
+                    and (t.source_table is self.source_table or t is self.source_table)
                 ]
                 if not aliases:
                     return c.quote(self.name)
                 elif len(aliases) > 1:
-                    raise CompileError(f"Too many aliases for column {self.name}")
+                    names = [a.name for a in aliases]
+                    raise CompileError(f"Too many aliases for column {self.name} between tables: {names}")
                 (alias,) = aliases
 
                 return f"{c.quote(alias.name)}.{c.quote(self.name)}"
@@ -593,6 +608,10 @@ class TableAlias(ExprNode, ITable):
     def compile(self, c: Compiler) -> str:
         return f"{c.compile(self.source_table)} {c.quote(self.name)}"
 
+    @property
+    def schema(self):
+        return self.source_table.schema
+
 
 
 ColumnsDef = Sequence[Union[Expr, ellipsis]]
@@ -622,6 +641,7 @@ class Join(ExprNode, ITable, Root):
         return self
 
     @property
+    @cache
     def schema(self):
         if not self.columns:
             schemas = [t.schema for t in self.source_tables if t.schema]
@@ -666,9 +686,10 @@ class Join(ExprNode, ITable, Root):
         tables = [
             t if isinstance(t, TableAlias) else TableAlias(t, parent_c.new_unique_name()) for t in self.source_tables
         ]
-        c = parent_c.add_table_context(*tables, in_join=True, in_select=False)
+        c = parent_c.replace(in_select=True)
         op = " JOIN " if self.op is None else f" {self.op} JOIN "
         joined = op.join(c.compile(t) for t in tables)
+        c = parent_c.add_table_context(*tables, in_select=True)
 
         if self.on_exprs:
             on = " AND ".join(c.compile(e) for e in self.on_exprs)
@@ -679,9 +700,8 @@ class Join(ExprNode, ITable, Root):
         columns = "*" if not self.columns else ", ".join(map(c.compile, self.columns))
         select = f"SELECT {columns} FROM {res}"
 
+        # TODO work with TableAlias
         if parent_c.in_select:
-            select = f"({select}) {c.new_unique_name()}"
-        elif parent_c.in_join:
             select = f"({select})"
         return select
 
@@ -698,8 +718,11 @@ class GroupBy(ExprNode, ITable, Root):
         return self
 
     @property
+    @cache
     def schema(self):
         s = self.table.schema
+        if s is None:
+            return None
         return type(s)({c.name: c.type for c in self.keys + self.values})
 
     def __post_init__(self):
@@ -747,12 +770,10 @@ class GroupBy(ExprNode, ITable, Root):
             " HAVING " + " AND ".join(map(c.compile, self.having_exprs)) if self.having_exprs is not None else ""
         )
         select = (
-            f"SELECT {columns_str} FROM {c.replace(in_select=True).compile(self.table)} GROUP BY {keys_str}{having_str}"
+            f"SELECT {columns_str} FROM {SelectCompiler(c).compile(self.table)} GROUP BY {keys_str}{having_str}"
         )
 
         if c.in_select:
-            select = f"({select}) {c.new_unique_name()}"
-        elif c.in_join:
             select = f"({select})"
         return select
 
@@ -783,11 +804,23 @@ class TableOp(ExprNode, ITable, Root):
         c = parent_c.replace(in_select=False)
         table_expr = f"{c.compile(self.table1)} {self.op} {c.compile(self.table2)}"
         if parent_c.in_select:
-            table_expr = f"({table_expr}) {c.new_unique_name()}"
-        elif parent_c.in_join:
             table_expr = f"({table_expr})"
         return table_expr
 
+
+@dataclass
+class SelectCompiler(AbstractCompiler):
+    c: Compiler
+
+    def compile(self, elem: Any, params: Dict[str, Any] = None) -> str:
+        if isinstance(elem, (Select, TableOp, GroupBy, Join)):
+            elem = TableAlias(elem, self.c.new_unique_name()) 
+        c = self.c.replace(in_select=True)
+        return c.compile(elem, params)
+
+    @property
+    def dialect(self):
+        return self.c.dialect
 
 @dataclass
 class Select(ExprTable, Root):
@@ -802,6 +835,7 @@ class Select(ExprTable, Root):
     optimizer_hints: Sequence[Expr] = None
 
     @property
+    @cache
     def schema(self):
         s = self.table.schema
         if s is None or not self.columns:
@@ -813,7 +847,7 @@ class Select(ExprTable, Root):
         return self
 
     def compile(self, parent_c: Compiler) -> str:
-        c = parent_c.replace(in_select=True)  # .add_table_context(self.table)
+        c = SelectCompiler(parent_c)
 
         columns = ", ".join(map(c.compile, self.columns)) if self.columns else "*"
         distinct = "DISTINCT " if self.distinct else ""
@@ -842,8 +876,6 @@ class Select(ExprTable, Root):
             select += " " + c.dialect.offset_limit(0, self.limit_expr)
 
         if parent_c.in_select:
-            select = f"({select}) {c.new_unique_name()}"
-        elif parent_c.in_join:
             select = f"({select})"
         return select
 

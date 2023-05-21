@@ -90,7 +90,10 @@ class Compiler(AbstractCompiler):
         return self.database.parse_table_name(f"{prefix}{self._counter[0]}_{'%x'%random.randrange(2**32)}")
 
     def add_table_context(self, *tables: Sequence, **kw):
-        return self.replace(_table_context=self._table_context + list(tables), **kw)
+        new_context = self._table_context + list(tables)
+        if len({t.name for t in new_context}) < len(new_context):
+            raise ValueError("Duplicate table alias", {t.name for t in new_context})
+        return self.replace(_table_context=new_context, **kw)
 
     def quote(self, s: str):
         return self.dialect.quote(s)
