@@ -189,6 +189,8 @@ class ITable(AbstractTable):
         return TableOp("INTERSECT", self, other)
 
     def alias(self, name):
+        if isinstance(self, TableAlias):
+            return self.replace(name=name)
         return TableAlias(self, name)
 
 
@@ -448,7 +450,8 @@ class Column(ExprNode, LazyOps):
         if c._table_context:
             if len(c._table_context) > 1:
                 aliases = [
-                    t for t in c._table_context if isinstance(t, TableAlias) and t.source_table is self.source_table
+                    t for t in c._table_context if isinstance(t, TableAlias)
+                    and (t.source_table is self.source_table or t is self.source_table)
                 ]
                 if not aliases:
                     return c.quote(self.name)
@@ -683,9 +686,10 @@ class Join(ExprNode, ITable, Root):
         tables = [
             t if isinstance(t, TableAlias) else TableAlias(t, parent_c.new_unique_name()) for t in self.source_tables
         ]
-        c = parent_c.add_table_context(*tables, in_select=True)
+        c = parent_c.replace(in_select=True)
         op = " JOIN " if self.op is None else f" {self.op} JOIN "
         joined = op.join(c.compile(t) for t in tables)
+        c = parent_c.add_table_context(*tables, in_select=True)
 
         if self.on_exprs:
             on = " AND ".join(c.compile(e) for e in self.on_exprs)

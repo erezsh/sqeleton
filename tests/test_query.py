@@ -4,7 +4,7 @@ import unittest
 from sqeleton.abcs import AbstractDatabase, AbstractDialect
 from sqeleton.utils import CaseInsensitiveDict, CaseSensitiveDict
 
-from sqeleton.queries import this, table, Compiler, outerjoin, cte, when, coalesce, CompileError
+from sqeleton.queries import this, table, Compiler, outerjoin, cte, when, coalesce, CompileError, join
 from sqeleton.queries.ast_classes import Random
 from sqeleton import code, this, table
 
@@ -333,6 +333,14 @@ class TestQuery(unittest.TestCase):
         q2 = q1.select(this.s)
 
         s = c.compile(q2)
-        # breakpoint()
         assert s == 'SELECT s FROM (SELECT i, s FROM a) q1'
+
+        q3 = join(t.alias('t'), q1).on(t['i'] == q1['i']).select()
+        s = c.compile(q3)
+        self.assertEqual( s, 'SELECT * FROM a t JOIN (SELECT i, s FROM a) q1 ON (t.i = q1.i)' )
+
+        q1_ = q1.alias('q1_')
+        q4 = join(q1, q1_).on(q1['i'] == q1_['i']).select()
+        s = c.compile(q4)
+        assert s == 'SELECT * FROM (SELECT i, s FROM a) q1 JOIN (SELECT i, s FROM a) q1_ ON (q1.i = q1_.i)'
 
