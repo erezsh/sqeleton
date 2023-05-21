@@ -2,7 +2,7 @@ from dataclasses import field
 from datetime import datetime
 from typing import Any, Generator, List, Optional, Sequence, Union, Dict, Literal
 from collections import ChainMap
-from functools import cache
+from functools import lru_cache
 
 from runtype import dataclass as _dataclass, cv_type_checking
 
@@ -27,6 +27,13 @@ class QB_TypeError(QueryBuilderError):
 dataclass = _dataclass(eq=False, order=False)
 
 ellipsis = type(Ellipsis)
+
+
+def cache(user_function, /):
+    'Simple lightweight unbounded cache.  Sometimes called "memoize".'
+    # Taken from https://github.com/python/cpython/blob/3.11/Lib/functools.py
+    return lru_cache(maxsize=None)(user_function)
+
 
 
 class CompilableNode(Compilable):
@@ -801,6 +808,7 @@ class TableOp(ExprNode, ITable, Root):
         elif parent_c.in_join:
             table_expr = f"({table_expr})"
         return table_expr
+
 
 
 @dataclass
