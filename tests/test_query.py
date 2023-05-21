@@ -206,7 +206,7 @@ class TestQuery(unittest.TestCase):
 
         q = c.compile(t.select(this.a).group_by(this.b).agg(this.c).select(optimizer_hints="PARALLEL(a 16)"))
         self.assertEqual(
-            q, "SELECT /*+ PARALLEL(a 16) */ * FROM (SELECT b, c FROM (SELECT a FROM a) tmp2 GROUP BY 1) tmp3"
+            q, "SELECT /*+ PARALLEL(a 16) */ * FROM (SELECT b, c FROM (SELECT a FROM a) tmp3 GROUP BY 1) tmp2"
         )
 
     def test_table_ops(self):
@@ -273,7 +273,7 @@ class TestQuery(unittest.TestCase):
 
         # Select interaction
         q = c.compile(t.select(this.a).group_by(this.b).agg(this.c).select(this.c + 1))
-        self.assertEqual(q, "SELECT (c + 1) FROM (SELECT b, c FROM (SELECT a FROM a) tmp3 GROUP BY 1) tmp4")
+        self.assertEqual(q, "SELECT (c + 1) FROM (SELECT b, c FROM (SELECT a FROM a) tmp4 GROUP BY 1) tmp3")
 
     def test_case_when(self):
         c = Compiler(MockDatabase())
@@ -322,3 +322,17 @@ class TestQuery(unittest.TestCase):
         q = t.select(..., neg_i=-this.i)
         assert q.schema == {**schema, 'neg_i': int}
         assert c.compile(q) == "SELECT *, (-i) AS neg_i FROM a"
+
+
+    def test_table_alias(self):
+        c = Compiler(MockDatabase())
+
+        schema = {'i': int, 's': str}
+        t = table("a", schema=schema)
+        q1 = t.select(this.i, this.s).alias('q1')
+        q2 = q1.select(this.s)
+
+        s = c.compile(q2)
+        # breakpoint()
+        assert s == 'SELECT s FROM (SELECT i, s FROM a) q1'
+

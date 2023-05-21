@@ -7,7 +7,7 @@ from functools import lru_cache
 from runtype import dataclass as _dataclass, cv_type_checking
 
 from ..utils import join_iter, ArithString
-from ..abcs import Compilable
+from ..abcs import AbstractCompiler, Compilable
 from ..abcs.database_types import AbstractTable
 from ..abcs.mixins import AbstractMixin_Regex, AbstractMixin_TimeTravel
 from ..schema import Schema
@@ -698,7 +698,7 @@ class Join(ExprNode, ITable, Root):
 
         # TODO work with TableAlias
         if parent_c.in_select:
-            select = f"({select}) {c.new_unique_name()}"
+            select = f"({select})"
         elif parent_c.in_join:
             select = f"({select})"
         return select
@@ -768,11 +768,11 @@ class GroupBy(ExprNode, ITable, Root):
             " HAVING " + " AND ".join(map(c.compile, self.having_exprs)) if self.having_exprs is not None else ""
         )
         select = (
-            f"SELECT {columns_str} FROM {c.replace(in_select=True).compile(self.table)} GROUP BY {keys_str}{having_str}"
+            f"SELECT {columns_str} FROM {SelectCompiler(c).compile(self.table)} GROUP BY {keys_str}{having_str}"
         )
 
         if c.in_select:
-            select = f"({select}) {c.new_unique_name()}"
+            select = f"({select})"
         elif c.in_join:
             select = f"({select})"
         return select
@@ -804,12 +804,25 @@ class TableOp(ExprNode, ITable, Root):
         c = parent_c.replace(in_select=False)
         table_expr = f"{c.compile(self.table1)} {self.op} {c.compile(self.table2)}"
         if parent_c.in_select:
-            table_expr = f"({table_expr}) {c.new_unique_name()}"
+            table_expr = f"({table_expr})"
         elif parent_c.in_join:
             table_expr = f"({table_expr})"
         return table_expr
 
 
+@dataclass
+class SelectCompiler(AbstractCompiler):
+    c: Compiler
+
+    def compile(self, elem: Any, params: Dict[str, Any] = None) -> str:
+        if isinstance(elem, (Select, TableOp, GroupBy)):
+            elem = TableAlias(elem, self.c.new_unique_name()) 
+        c = self.c.replace(in_select=True)
+        return c.compile(elem, params)
+
+    @property
+    def dialect(self):
+        return self.c.dialect
 
 @dataclass
 class Select(ExprTable, Root):
@@ -836,7 +849,7 @@ class Select(ExprTable, Root):
         return self
 
     def compile(self, parent_c: Compiler) -> str:
-        c = parent_c.replace(in_select=True)  # .add_table_context(self.table)
+        c = SelectCompiler(parent_c)
 
         columns = ", ".join(map(c.compile, self.columns)) if self.columns else "*"
         distinct = "DISTINCT " if self.distinct else ""
@@ -865,7 +878,7 @@ class Select(ExprTable, Root):
             select += " " + c.dialect.offset_limit(0, self.limit_expr)
 
         if parent_c.in_select:
-            select = f"({select}) {c.new_unique_name()}"
+            select = f"({select})"
         elif parent_c.in_join:
             select = f"({select})"
         return select

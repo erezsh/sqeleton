@@ -8,7 +8,7 @@ from sqeleton import connect
 from sqeleton import databases as dbs
 from sqeleton.queries import table, current_timestamp, NormalizeAsString
 from .common import TEST_MYSQL_CONN_STRING
-from .common import str_to_checksum, test_each_database_in_list, get_conn, random_table_suffix
+from .common import str_to_checksum, make_test_each_database_in_list, get_conn, random_table_suffix
 from sqeleton.abcs.database_types import TimestampTZ
 
 TEST_DATABASES = {
@@ -24,7 +24,7 @@ TEST_DATABASES = {
     dbs.Vertica,
 }
 
-test_each_database: Callable = test_each_database_in_list(TEST_DATABASES)
+test_each_database: Callable = make_test_each_database_in_list(TEST_DATABASES)
 
 
 class TestDatabase(unittest.TestCase):
