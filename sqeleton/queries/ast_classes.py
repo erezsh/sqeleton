@@ -683,7 +683,7 @@ class Join(ExprNode, ITable, Root):
         tables = [
             t if isinstance(t, TableAlias) else TableAlias(t, parent_c.new_unique_name()) for t in self.source_tables
         ]
-        c = parent_c.add_table_context(*tables, in_join=True, in_select=False)
+        c = parent_c.add_table_context(*tables, in_select=True)
         op = " JOIN " if self.op is None else f" {self.op} JOIN "
         joined = op.join(c.compile(t) for t in tables)
 
@@ -698,8 +698,6 @@ class Join(ExprNode, ITable, Root):
 
         # TODO work with TableAlias
         if parent_c.in_select:
-            select = f"({select})"
-        elif parent_c.in_join:
             select = f"({select})"
         return select
 
@@ -773,8 +771,6 @@ class GroupBy(ExprNode, ITable, Root):
 
         if c.in_select:
             select = f"({select})"
-        elif c.in_join:
-            select = f"({select})"
         return select
 
 
@@ -804,8 +800,6 @@ class TableOp(ExprNode, ITable, Root):
         c = parent_c.replace(in_select=False)
         table_expr = f"{c.compile(self.table1)} {self.op} {c.compile(self.table2)}"
         if parent_c.in_select:
-            table_expr = f"({table_expr})"
-        elif parent_c.in_join:
             table_expr = f"({table_expr})"
         return table_expr
 
@@ -878,8 +872,6 @@ class Select(ExprTable, Root):
             select += " " + c.dialect.offset_limit(0, self.limit_expr)
 
         if parent_c.in_select:
-            select = f"({select})"
-        elif parent_c.in_join:
             select = f"({select})"
         return select
 
