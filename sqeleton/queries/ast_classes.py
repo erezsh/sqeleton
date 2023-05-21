@@ -1,6 +1,6 @@
 from dataclasses import field
 from datetime import datetime
-from typing import Any, Generator, List, Optional, Sequence, Union, Dict
+from typing import Any, Generator, List, Optional, Sequence, Union, Dict, Literal
 from collections import ChainMap
 
 from runtype import dataclass as _dataclass, cv_type_checking
@@ -405,6 +405,10 @@ class UnaryOp(ExprNode, LazyOps):
     def compile(self, c: Compiler) -> str:
         return f"({self.op}{c.compile(self.expr)})"
 
+    @property
+    def type(self):
+        return self.expr.type
+
 
 class BinBoolOp(BinOp):
     type = bool
@@ -759,10 +763,12 @@ class TableOp(ExprNode, ITable, Root):
         return table_expr
 
 
+ellipsis = type(Ellipsis)
+
 @dataclass
 class Select(ExprTable, Root):
     table: Expr = None
-    columns: Sequence[Expr] = None
+    columns: Sequence[Union[Expr, ellipsis]] = None
     where_exprs: Sequence[Expr] = None
     order_by_exprs: Sequence[Expr] = None
     group_by_exprs: Sequence[Expr] = None
@@ -776,7 +782,15 @@ class Select(ExprTable, Root):
         s = self.table.schema
         if s is None or self.columns is None:
             return s
-        return type(s)({c.name: c.type for c in self.columns})
+        columns = []
+        for c in self.columns:
+            if c is ...:
+                # select all, i.e. *
+                columns += s.items()
+            else:
+                columns.append((c.name, c.type))
+
+        return type(s)(dict(columns))
 
     @property
     def source_table(self):

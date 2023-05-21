@@ -77,6 +77,8 @@ class Compiler(AbstractCompiler):
             return str(elem)
         elif isinstance(elem, ArithString):
             return f"'{elem}'"
+        elif elem is ...:
+            return "*"
         assert False, elem
 
     def new_unique_name(self, prefix="tmp"):

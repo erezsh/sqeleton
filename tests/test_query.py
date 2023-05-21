@@ -313,3 +313,12 @@ class TestQuery(unittest.TestCase):
 
         q = c.compile(tablesample(nonzero, 10))
         self.assertEqual(q, "SELECT * FROM points WHERE (x > 0) AND (y > 0) TABLESAMPLE BERNOULLI (10)")
+
+
+    def test_ellipsis(self):
+        c = Compiler(MockDatabase())
+        schema = {'i': int, 's': str}
+        t = table("a", schema=schema)
+        q = t.select(..., neg_i=-this.i)
+        assert q.schema == {**schema, 'neg_i': int}
+        assert c.compile(q) == "SELECT *, (-i) AS neg_i FROM a"
