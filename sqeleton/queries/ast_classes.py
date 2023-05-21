@@ -2,6 +2,7 @@ from dataclasses import field
 from datetime import datetime
 from typing import Any, Generator, List, Optional, Sequence, Union, Dict, Literal
 from collections import ChainMap
+from functools import cache
 
 from runtype import dataclass as _dataclass, cv_type_checking
 
@@ -179,6 +180,9 @@ class ITable(AbstractTable):
     def intersect(self, other: "ITable"):
         """SELECT * FROM self INTERSECT other"""
         return TableOp("INTERSECT", self, other)
+
+    def alias(self, name):
+        return TableAlias(self, name)
 
 
 @dataclass
@@ -442,7 +446,8 @@ class Column(ExprNode, LazyOps):
                 if not aliases:
                     return c.quote(self.name)
                 elif len(aliases) > 1:
-                    raise CompileError(f"Too many aliases for column {self.name}")
+                    names = [a.name for a in aliases]
+                    raise CompileError(f"Too many aliases for column {self.name} between tables: {names}")
                 (alias,) = aliases
 
                 return f"{c.quote(alias.name)}.{c.quote(self.name)}"
@@ -593,6 +598,10 @@ class TableAlias(ExprNode, ITable):
     def compile(self, c: Compiler) -> str:
         return f"{c.compile(self.source_table)} {c.quote(self.name)}"
 
+    @property
+    def schema(self):
+        return self.source_table.schema
+
 
 
 ColumnsDef = Sequence[Union[Expr, ellipsis]]
@@ -622,6 +631,7 @@ class Join(ExprNode, ITable, Root):
         return self
 
     @property
+    @cache
     def schema(self):
         if not self.columns:
             schemas = [t.schema for t in self.source_tables if t.schema]
@@ -679,6 +689,7 @@ class Join(ExprNode, ITable, Root):
         columns = "*" if not self.columns else ", ".join(map(c.compile, self.columns))
         select = f"SELECT {columns} FROM {res}"
 
+        # TODO work with TableAlias
         if parent_c.in_select:
             select = f"({select}) {c.new_unique_name()}"
         elif parent_c.in_join:
@@ -698,8 +709,10 @@ class GroupBy(ExprNode, ITable, Root):
         return self
 
     @property
+    @cache
     def schema(self):
         s = self.table.schema
+        assert s, type(self.table)
         return type(s)({c.name: c.type for c in self.keys + self.values})
 
     def __post_init__(self):
@@ -802,6 +815,7 @@ class Select(ExprTable, Root):
     optimizer_hints: Sequence[Expr] = None
 
     @property
+    @cache
     def schema(self):
         s = self.table.schema
         if s is None or not self.columns:
