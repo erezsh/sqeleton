@@ -712,7 +712,8 @@ class GroupBy(ExprNode, ITable, Root):
     @cache
     def schema(self):
         s = self.table.schema
-        assert s, type(self.table)
+        if s is None:
+            return None
         return type(s)({c.name: c.type for c in self.keys + self.values})
 
     def __post_init__(self):
