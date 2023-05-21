@@ -218,6 +218,12 @@ class LazyOps:
     def __sub__(self, other):
         return BinOp("-", [self, other])
 
+    def __mul__(self, other):
+        return BinOp("*", [self, other])
+
+    def __div__(self, other):
+        return BinOp("/", [self, other])
+
     def __neg__(self):
         return UnaryOp("-", self)
 
@@ -311,7 +317,7 @@ class WhenThen(ExprNode):
 
 
 @dataclass
-class CaseWhen(ExprNode):
+class CaseWhen(ExprNode, LazyOps):
     cases: Sequence[WhenThen]
     else_expr: Expr = None
 
