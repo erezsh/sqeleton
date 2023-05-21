@@ -25,6 +25,8 @@ class QB_TypeError(QueryBuilderError):
 
 dataclass = _dataclass(eq=False, order=False)
 
+ellipsis = type(Ellipsis)
+
 
 class CompilableNode(Compilable):
     "Base class for query expression nodes"
@@ -529,7 +531,7 @@ class TablePath(ExprTable):
 
         if isinstance(rows[0], dict):
             keys = list(rows[0].keys())
-            if columns is None:
+            if not columns:
                 columns = keys
             elif not (set(columns) <= set(rows[0].keys())):
                 raise ValueError("Keys in dictionary are not a subset of 'columns'")
@@ -592,12 +594,28 @@ class TableAlias(ExprNode, ITable):
         return f"{c.compile(self.source_table)} {c.quote(self.name)}"
 
 
+
+ColumnsDef = Sequence[Union[Expr, ellipsis]]
+def _expand_ellipsis(schema: dict, columns: ColumnsDef):
+    for c in columns:
+        if c is ...:
+            # select all, i.e. *
+            yield from schema.items()
+        else:
+            yield c.name, c.type
+
+def _union_dicts(*ds):
+    unioned = {}
+    for d in ds:
+        unioned.update(d)
+    return unioned
+
 @dataclass
 class Join(ExprNode, ITable, Root):
     source_tables: Sequence[ITable]
     op: str = None
     on_exprs: Sequence[Expr] = None
-    columns: Sequence[Expr] = None
+    columns: ColumnsDef = None
 
     @property
     def source_table(self):
@@ -605,13 +623,15 @@ class Join(ExprNode, ITable, Root):
 
     @property
     def schema(self):
-        if self.columns is None:
+        if not self.columns:
             schemas = [t.schema for t in self.source_tables if t.schema]
             assert schemas and all(schemas)
             return type(schemas[0])(ChainMap(*schemas))  # TODO merge dictionaries in compliance with SQL dialect!
 
-        s = self.source_tables[0].schema  # TODO validate types match between both tables
-        return type(s)({c.name: c.type for c in self.columns})
+        # TODO validate types match between both tables
+        schemas = [s.schema for s in self.source_tables]
+        d = _union_dicts(*schemas)
+        return type(schemas[0])(dict(_expand_ellipsis(d, self.columns)))
 
     def on(self, *exprs) -> "Join":
         """Add an ON clause, for filtering the result of the cartesian product (i.e. the JOIN)"""
@@ -656,7 +676,7 @@ class Join(ExprNode, ITable, Root):
         else:
             res = joined
 
-        columns = "*" if self.columns is None else ", ".join(map(c.compile, self.columns))
+        columns = "*" if not self.columns else ", ".join(map(c.compile, self.columns))
         select = f"SELECT {columns} FROM {res}"
 
         if parent_c.in_select:
@@ -712,7 +732,7 @@ class GroupBy(ExprNode, ITable, Root):
 
         keys = [str(i + 1) for i in range(len(self.keys))]
         columns = (self.keys or []) + (self.values or [])
-        if isinstance(self.table, Select) and self.table.columns is None and self.table.group_by_exprs is None:
+        if isinstance(self.table, Select) and not self.table.columns and self.table.group_by_exprs is None:
             return c.compile(
                 self.table.replace(
                     columns=columns,
@@ -769,13 +789,10 @@ class TableOp(ExprNode, ITable, Root):
         return table_expr
 
 
-ellipsis = type(Ellipsis)
-
-
 @dataclass
 class Select(ExprTable, Root):
     table: Expr = None
-    columns: Sequence[Union[Expr, ellipsis]] = None
+    columns: ColumnsDef = None
     where_exprs: Sequence[Expr] = None
     order_by_exprs: Sequence[Expr] = None
     group_by_exprs: Sequence[Expr] = None
@@ -787,17 +804,9 @@ class Select(ExprTable, Root):
     @property
     def schema(self):
         s = self.table.schema
-        if s is None or self.columns is None:
+        if s is None or not self.columns:
             return s
-        columns = []
-        for c in self.columns:
-            if c is ...:
-                # select all, i.e. *
-                columns += s.items()
-            else:
-                columns.append((c.name, c.type))
-
-        return type(s)(dict(columns))
+        return type(s)(dict(_expand_ellipsis(s, self.columns)))
 
     @property
     def source_table(self):
