@@ -113,13 +113,13 @@ We will define a function that performs outer-join on any database, and adds two
 
 ```python
 from sqeleton.databases import Database
-from sqeleton.queries import ITable, leftjoin, rightjoin, outerjoin, and_
+from sqeleton.queries import ITable, leftjoin, rightjoin, outerjoin, and_, Expr
 
 def my_outerjoin(
         db: Database,
         a: ITable, b: ITable,
         keys1: List[str], keys2: List[str],
-        select_fields: dict
+        select_fields: Dict[str, Expr]
     ) -> ITable:
     """This function accepts two table expressions, and returns an outer-join query.
     
