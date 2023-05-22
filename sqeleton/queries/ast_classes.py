@@ -813,7 +813,7 @@ class SelectCompiler(AbstractCompiler):
     c: Compiler
 
     def compile(self, elem: Any, params: Dict[str, Any] = None) -> str:
-        if isinstance(elem, (Select, TableOp, GroupBy)):
+        if isinstance(elem, (Select, TableOp, GroupBy, Join)):
             elem = TableAlias(elem, self.c.new_unique_name()) 
         c = self.c.replace(in_select=True)
         return c.compile(elem, params)
