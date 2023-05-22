@@ -357,7 +357,10 @@ class Database(AbstractDatabase[T]):
                 sys.exit(1)
 
         res = self._query(sql_code)
-        if res_type is list:
+        if res is None:
+            assert res_type is None
+            return
+        elif res_type is list:
             return list(res)
         elif res_type in (int, str):
             if not res:
@@ -509,7 +512,7 @@ class Database(AbstractDatabase[T]):
         assert isinstance(sql_code, str), sql_code
         try:
             c.execute(sql_code)
-            if sql_code.lstrip().lower().startswith(("select", "explain", "show")):
+            if sql_code.lstrip().lower().startswith(("select", "explain", "show", "with")):
                 columns = [col[0] for col in c.description]
                 return QueryResult(c.fetchall(), columns)
         except Exception as _e:
