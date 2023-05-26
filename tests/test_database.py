@@ -6,7 +6,7 @@ import pytz
 
 from sqeleton import connect
 from sqeleton import databases as dbs
-from sqeleton.queries import table, current_timestamp, NormalizeAsString
+from sqeleton.queries import table, current_timestamp, NormalizeAsString, ForeignKey, Compiler
 from .common import TEST_MYSQL_CONN_STRING
 from .common import str_to_checksum, make_test_each_database_in_list, get_conn, random_table_suffix
 from sqeleton.abcs.database_types import TimestampTZ
@@ -136,6 +136,27 @@ class TestQueries(unittest.TestCase):
         self.assertEqual(updated_at, expected)
 
         db.query(tbl.drop())
+
+    def test_foreign_key(self):
+        db = get_conn(self.db_cls)
+
+        a = table('tbl1_' + random_table_suffix(), schema={'id': int})
+        b = table('tbl2_' + random_table_suffix(), schema={'a': ForeignKey(a, 'id')})
+        c = Compiler(db)
+
+        s = c.compile(b.create())
+        try:
+            db.query([
+                a.create(),
+                b.create()
+            ])
+
+            breakpoint()
+        finally:
+            db.query([
+                a.drop(True),
+                b.drop(True),
+            ])
 
 @test_each_database
 class TestThreePartIds(unittest.TestCase):

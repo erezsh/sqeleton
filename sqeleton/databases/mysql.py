@@ -99,12 +99,14 @@ class Dialect(BaseDialect, Mixin_Schema, Mixin_OptimizerHints):
         return "RAND()"
 
     def type_repr(self, t) -> str:
-        try:
-            return {
-                str: "VARCHAR(1024)",
-            }[t]
-        except KeyError:
-            return super().type_repr(t)
+        if isinstance(t, type):
+            try:
+                return {
+                    str: "VARCHAR(1024)",
+                }[t]
+            except KeyError:
+                pass
+        return super().type_repr(t)
 
     def explain_as_text(self, query: str) -> str:
         return f"EXPLAIN FORMAT=TREE {query}"

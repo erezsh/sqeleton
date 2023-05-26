@@ -8,7 +8,7 @@ from runtype import dataclass as _dataclass, cv_type_checking
 
 from ..utils import join_iter, ArithString
 from ..abcs import AbstractCompiler, Compilable
-from ..abcs.database_types import AbstractTable
+from ..abcs.database_types import AbstractTable, AbstractDialect
 from ..abcs.mixins import AbstractMixin_Regex, AbstractMixin_TimeTravel
 from ..schema import Schema
 
@@ -465,6 +465,8 @@ class Column(ExprNode, LazyOps):
         return c.quote(self.name)
 
 
+
+
 class ExprTable(ExprNode, ITable):
     pass
 
@@ -478,9 +480,13 @@ class TablePath(ExprTable):
     def source_table(self):
         return self
 
+    def to_string(self, dialect: AbstractDialect):
+        return ".".join(map(dialect.quote, self.path))
+
     def compile(self, c: Compiler) -> str:
-        path = self.path  # c.database._normalize_table_path(self.name)
-        return ".".join(map(c.quote, path))
+        # path = self.path  # c.database._normalize_table_path(self.name)
+        # return ".".join(map(c.quote, path))
+        return self.to_string(c.dialect)
 
     def __repr__(self) -> str:
         if self.schema:
@@ -598,6 +604,12 @@ class TablePath(ExprTable):
 
         if timestamp is not None:
             assert offset is None and statement is None
+
+
+@_dataclass
+class ForeignKey:
+    table: TablePath
+    field: str
 
 
 @dataclass
