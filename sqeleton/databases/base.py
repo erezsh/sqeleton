@@ -200,6 +200,7 @@ class BaseDialect(AbstractDialect):
         return {
             int: "INT",
             str: "VARCHAR",
+            bytes: "BLOB",
             bool: "BOOLEAN",
             float: "FLOAT",
             datetime: "TIMESTAMP",
@@ -318,9 +319,10 @@ class Database(AbstractDatabase[T]):
     ) -> TRes:
         """Query the given SQL code/AST, and attempt to convert the result to type 'res_type'
 
-        If given a generator, it will execute all the yielded sql queries with the same thread and cursor.
-        The results of the queries a returned by the `yield` stmt (using the .send() mechanism).
-        It's a cleaner approach than exposing cursors, but may not be enough in all cases.
+        If given a generator:
+            It will execute all the yielded sql queries with the same thread and cursor.
+            The results of the queries are returned by the `yield` stmt (using the .send() mechanism).
+            It's a cleaner approach than exposing cursors, but may not be enough in all cases.
         """
         if sql_ast is SKIP:
             return
