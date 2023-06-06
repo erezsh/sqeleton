@@ -236,7 +236,10 @@ class LazyOps:
     def __mul__(self, other):
         return BinOp("*", [self, other])
 
-    def __div__(self, other):
+    __radd__ = __add__
+    __rmul__ = __mul__
+
+    def __truediv__(self, other):
         return BinOp("/", [self, other])
 
     def __neg__(self):
@@ -256,6 +259,15 @@ class LazyOps:
             return BinBoolOp("IS", [self, None])
 
         return BinBoolOp("=", [self, other])
+
+    def __ne__(self, other):
+        if cv_type_checking.get():
+            return super().__ne__(other)
+
+        if other is None:
+            return BinBoolOp("IS NOT", [self, None])
+
+        return BinBoolOp("<>", [self, other])
 
     def __lt__(self, other):
         return BinBoolOp("<", [self, other])
@@ -413,7 +425,8 @@ class BinOp(ExprNode, LazyOps):
     def type(self):
         types = {_expr_type(i) for i in self.args}
         if len(types) > 1:
-            raise TypeError(f"Expected all args to have the same type, got {types}")
+            # raise TypeError(f"Expected all args to have the same type, got {types}")
+            return Union[tuple(types)]
         (t,) = types
         return t
 
