@@ -539,7 +539,7 @@ class TablePath(ExprTable):
         where_exprs = args_as_tuple(where_exprs)
         where_exprs = _drop_skips(where_exprs)
         if not where_exprs:
-            return self
+            return self.truncate()
 
         resolve_names(self.source_table, where_exprs)
         return DeleteFromTable(self, where_exprs)
@@ -623,6 +623,10 @@ class TablePath(ExprTable):
 class ForeignKey:
     table: TablePath
     field: str
+
+    @property
+    def type(self):
+        return self.table.schema[self.field]
 
 
 @dataclass
@@ -1083,7 +1087,7 @@ class Explain(ExprNode, Root):
 
 
 @dataclass
-class CurrentTimestamp(ExprNode):
+class CurrentTimestamp(ExprNode, LazyOps):
     type = datetime
 
     def compile(self, c: Compiler) -> str:
