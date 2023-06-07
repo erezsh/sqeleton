@@ -1,6 +1,6 @@
 import decimal
 from abc import ABC, abstractmethod
-from typing import Sequence, Optional, Tuple, Union, Dict, List, TypeVar, Generic
+from typing import Sequence, Optional, Tuple, Union, Dict, List, TypeVar, Generic, Any
 from datetime import datetime
 
 from runtype import dataclass
@@ -252,7 +252,7 @@ class AbstractDatabase(Generic[T_Dialect]):
         "List of parameters given in the path of the URI"
 
     @abstractmethod
-    def _query(self, sql_code: str) -> list:
+    def _query(self, sql_code: Any) -> list:
         "Send query to database and return result"
 
     @abstractmethod

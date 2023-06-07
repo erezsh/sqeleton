@@ -1,10 +1,10 @@
 from .compiler import Compiler, CompileError
+from .base import SKIP, T_SKIP
 from .api import (
     this,
     join,
     outerjoin,
     table,
-    SKIP,
     sum_,
     avg,
     min_,

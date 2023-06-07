@@ -25,7 +25,7 @@ from runtype import dataclass
 from sqeleton.queries.compiler import CompiledCode
 
 from ..utils import is_uuid, safezip, Self
-from ..queries import Expr, Compiler, table, Select, SKIP, Explain, Code, this
+from ..queries import ExprNode, Compiler, table, Select, SKIP, T_SKIP, Explain, Code, this
 from ..queries.ast_classes import ForeignKey, Random, CompilableNode
 from ..abcs.database_types import (
     AbstractDatabase,
@@ -119,10 +119,9 @@ class ThreadLocalInterpreter:
         self.compiler = compiler
 
     def apply_queries(self, callback: Callable[[CompiledCode], Any]) -> QueryResult:
-        q: Expr = next(self.gen)
+        q: ExprNode = next(self.gen)
         while True:
             sql = self.compiler.compile_with_args(q)
-            logger.debug("Running SQL (%s-TL): %s", self.compiler.database.name, sql)
             try:
                 try:
                     res = callback(sql) if sql is not SKIP else SKIP
@@ -325,8 +324,10 @@ class Database(AbstractDatabase[T]):
         return compiler.compile(sql_ast)
 
     def query(
-        self, sql_ast: Union[Expr, CompilableNode, Generator, Sequence[CompilableNode]], res_type: Type[TRes] = None
-    ) -> TRes:
+            self,
+            sql_ast: Union[str, ExprNode, CompilableNode, Generator, List[CompilableNode]],
+            res_type: Optional[Type[TRes]] = None
+    ) -> Union[Optional[TRes], T_SKIP]:
         """Query the given SQL code/AST, and attempt to convert the result to type 'res_type'
 
         If given a generator:
@@ -353,8 +354,6 @@ class Database(AbstractDatabase[T]):
                 sql_code = compiler.compile_with_args(sql_ast)
                 if sql_code is SKIP:
                     return SKIP
-
-            logger.debug("Running SQL (%s): %s", self.name, sql_code)
 
         if self._interactive and isinstance(sql_ast, Select):
             explained_sql = compiler.compile(Explain(sql_ast))
@@ -530,7 +529,7 @@ class Database(AbstractDatabase[T]):
                 return QueryResult(c.fetchall(), columns)
         except Exception as _e:
             # logger.exception(e)
-            logger.error(f'Caused by SQL: {sql_code}')
+            # logger.error(f'Caused by SQL: {sql_code}')
             raise
 
     def _query_conn(self, conn, sql_code: Union[str, CompiledCode, ThreadLocalInterpreter]) -> Optional[QueryResult]:
@@ -546,6 +545,7 @@ class Database(AbstractDatabase[T]):
         return super().close()
 
     def list_tables(self, tables_like, schema=None):
+        self.dialect: Mixin_Schema
         return self.query(self.dialect.list_tables(schema or self.default_schema, tables_like))
 
     def table(self, *path, **kw):

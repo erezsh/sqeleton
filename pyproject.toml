@@ -80,4 +80,4 @@ line-length = 120
 target-version = "py38"
 
 [mypy]
-plugins = runtype.mypy
+plugins = "runtype.mypy"

@@ -11,7 +11,7 @@ from typing import (
     Generator,
     List,
 )
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from weakref import ref
 import math
 import string
@@ -95,6 +95,10 @@ class CaseAwareMapping(MutableMapping[str, V]):
     def get_key(self, key: str) -> str:
         ...
 
+    @abstractmethod
+    def __init__(self, initial):
+        ...
+
     def new(self, initial=()):
         return type(self)(initial)
 
@@ -129,7 +133,7 @@ class CaseInsensitiveDict(CaseAwareMapping[V]):
 
 
 class CaseSensitiveDict(dict, CaseAwareMapping):
-    def get_key(self, key):
+    def get_key(self, key) -> str:
         self[key]  # Throw KeyError if key doesn't exist
         return key
 
@@ -142,7 +146,7 @@ class CaseSensitiveDict(dict, CaseAwareMapping):
 alphanums = " -" + string.digits + string.ascii_uppercase + "_" + string.ascii_lowercase
 
 
-class ArithString:
+class ArithString(ABC):
     @classmethod
     def new(cls, *args, **kw):
         return cls(*args, **kw)
@@ -151,6 +155,11 @@ class ArithString:
         assert isinstance(other, ArithString)
         checkpoints = split_space(self.int, other.int, count)
         return [self.new(int=i) for i in checkpoints]
+
+    @property
+    @abstractmethod
+    def int(self):
+        ...
 
 
 class ArithUUID(UUID, ArithString):
@@ -336,5 +345,5 @@ class Unknown(metaclass=UnknownMeta):
     def __nonzero__(self):
         raise TypeError()
 
-    def __new__(class_, *args, **kwargs):
+    def __new__(cls, *args, **kwargs):
         raise RuntimeError("Unknown is a singleton")
