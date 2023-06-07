@@ -22,9 +22,11 @@ from abc import abstractmethod
 
 from runtype import dataclass
 
+from sqeleton.queries.compiler import CompiledCode
+
 from ..utils import is_uuid, safezip, Self
 from ..queries import Expr, Compiler, table, Select, SKIP, Explain, Code, this
-from ..queries.ast_classes import Random, CompilableNode
+from ..queries.ast_classes import ForeignKey, Random, CompilableNode
 from ..abcs.database_types import (
     AbstractDatabase,
     AbstractDialect,
@@ -91,6 +93,21 @@ def _one(seq):
     return x
 
 
+@dataclass
+class QueryResult:
+    rows: list
+    columns: list = None
+
+    def __iter__(self):
+        return iter(self.rows)
+
+    def __len__(self):
+        return len(self.rows)
+
+    def __getitem__(self, i):
+        return self.rows[i]
+
+
 class ThreadLocalInterpreter:
     """An interpeter used to execute a sequence of queries within the same thread and cursor.
 
@@ -101,10 +118,10 @@ class ThreadLocalInterpreter:
         self.gen = gen
         self.compiler = compiler
 
-    def apply_queries(self, callback: Callable[[str], Any]):
+    def apply_queries(self, callback: Callable[[CompiledCode], Any]) -> QueryResult:
         q: Expr = next(self.gen)
         while True:
-            sql = self.compiler.compile(q)
+            sql = self.compiler.compile_with_args(q)
             logger.debug("Running SQL (%s-TL): %s", self.compiler.database.name, sql)
             try:
                 try:
@@ -117,7 +134,7 @@ class ThreadLocalInterpreter:
                 break
 
 
-def apply_query(callback: Callable[[str], Any], sql_code: Union[str, ThreadLocalInterpreter]) -> list:
+def apply_query(callback: Callable[[CompiledCode], Any], sql_code: Union[CompiledCode, ThreadLocalInterpreter]) -> Optional[QueryResult]:
     if isinstance(sql_code, ThreadLocalInterpreter):
         return sql_code.apply_queries(callback)
     else:
@@ -162,6 +179,8 @@ class BaseDialect(AbstractDialect):
 
     PLACEHOLDER_TABLE = None  # Used for Oracle
 
+    ARG_SYMBOL = "?"
+
     def offset_limit(self, offset: Optional[int] = None, limit: Optional[int] = None):
         if offset:
             raise NotImplementedError("No support for OFFSET in query")
@@ -197,14 +216,21 @@ class BaseDialect(AbstractDialect):
             return t
         elif isinstance(t, TimestampTZ):
             return f"TIMESTAMP({min(t.precision, DEFAULT_DATETIME_PRECISION)})"
+        elif isinstance(t, ForeignKey):
+            return self.type_repr(t.type)
         return {
             int: "INT",
             str: "VARCHAR",
-            bytes: "BLOB",
+            bytes: "BYTEA",
             bool: "BOOLEAN",
             float: "FLOAT",
             datetime: "TIMESTAMP",
         }[t]
+
+    # def decl_repr(self, name, type_):
+    #     if isinstance(type_, ForeignKey):
+    #         return f"FOREIGN KEY ({name}) REFERENCES Persons(PersonID)"
+
 
     def _parse_type_repr(self, type_repr: str) -> Optional[Type[ColType]]:
         return self.TYPE_CLASSES.get(type_repr)
@@ -273,22 +299,6 @@ class BaseDialect(AbstractDialect):
 T = TypeVar("T", bound=BaseDialect)
 TRes = TypeVar("TRes")
 
-
-@dataclass
-class QueryResult:
-    rows: list
-    columns: list = None
-
-    def __iter__(self):
-        return iter(self.rows)
-
-    def __len__(self):
-        return len(self.rows)
-
-    def __getitem__(self, i):
-        return self.rows[i]
-
-
 class Database(AbstractDatabase[T]):
     """Base abstract class for databases.
 
@@ -340,7 +350,7 @@ class Database(AbstractDatabase[T]):
             else:
                 if res_type is None:
                     res_type = sql_ast.type
-                sql_code = compiler.compile(sql_ast)
+                sql_code = compiler.compile_with_args(sql_ast)
                 if sql_code is SKIP:
                     return SKIP
 
@@ -383,7 +393,7 @@ class Database(AbstractDatabase[T]):
             assert len(res) == 1, (sql_code, res)
             return res[0]
         elif getattr(res_type, "__origin__", None) is list and len(res_type.__args__) == 1:
-            if res_type.__args__ in ((int,), (str,), (float,)):
+            if res_type.__args__ in ((int,), (str,), (bytes,), (float,)):
                 return [_one(row) for row in res]
             elif res_type.__args__ in [(Tuple,), (tuple,)]:
                 return [tuple(row) for row in res]
@@ -510,19 +520,23 @@ class Database(AbstractDatabase[T]):
     def parse_table_name(self, name: str) -> DbPath:
         return parse_table_name(name)
 
-    def _query_cursor(self, c, sql_code: str) -> Optional[QueryResult]:
-        assert isinstance(sql_code, str), sql_code
+    def _query_cursor(self, c, sql_code: CompiledCode) -> Optional[QueryResult]:
+        assert isinstance(sql_code, CompiledCode), sql_code
         try:
-            c.execute(sql_code)
-            if sql_code.lstrip().lower().startswith(("select", "explain", "show", "with")):
+            logger.debug(f"{self.name} Executing SQL: {sql_code.code} || {sql_code.args}")
+            c.execute(sql_code.code, sql_code.args)
+            if sql_code.code.lstrip().lower().startswith(("select", "explain", "show", "with")):
                 columns = [col[0] for col in c.description]
                 return QueryResult(c.fetchall(), columns)
         except Exception as _e:
             # logger.exception(e)
-            # logger.error(f'Caused by SQL: {sql_code}')
+            logger.error(f'Caused by SQL: {sql_code}')
             raise
 
-    def _query_conn(self, conn, sql_code: Union[str, ThreadLocalInterpreter]) -> QueryResult:
+    def _query_conn(self, conn, sql_code: Union[str, CompiledCode, ThreadLocalInterpreter]) -> Optional[QueryResult]:
+        if isinstance(sql_code, str):
+            sql_code = CompiledCode(sql_code, [])
+
         c = conn.cursor()
         callback = partial(self._query_cursor, c)
         return apply_query(callback, sql_code)

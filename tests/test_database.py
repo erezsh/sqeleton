@@ -151,7 +151,8 @@ class TestQueries(unittest.TestCase):
                 b.create()
             ])
 
-            breakpoint()
+            print("TODO foreign key")
+            # breakpoint()
         finally:
             db.query([
                 a.drop(True),

@@ -1,6 +1,6 @@
 import random
 from datetime import datetime, date
-from typing import Any, Dict, Sequence, List
+from typing import Any, Dict, Sequence, List, Optional
 from uuid import UUID
 import decimal
 
@@ -21,17 +21,33 @@ class CompileError(Exception):
 class Root:
     "Nodes inheriting from Root can be used as root statements in SQL (e.g. SELECT yes, RANDOM() no)"
 
+@dataclass
+class CompiledCode:
+    code: str
+    args: list[Any]
+
+
+
+import re
+def eval_template(query_template: str, data_dict: dict[str, Any], arg_symbol) -> tuple[str, list]:
+    args = []
+    def replace_match(match):
+        varname = match.group(1)
+        args.append(data_dict[varname])
+        return arg_symbol
+    return re.sub('\xff' + r'\[(\w+)\]', replace_match, query_template), args
 
 @dataclass
 class Compiler(AbstractCompiler):
     database: AbstractDatabase
-    params: dict = {}
     in_select: bool = False  # Compilation runtime flag
     in_join: bool = False  # Compilation runtime flag
 
     _table_context: List = []  # List[ITable]
     _subqueries: Dict[str, Any] = {}  # XXX not thread-safe
-    root: bool = True
+    _args: Dict[str, Any] = {}
+    _args_enabled: bool = False
+    _is_root: bool = True
 
     _counter: List = [0]
 
@@ -39,44 +55,75 @@ class Compiler(AbstractCompiler):
     def dialect(self) -> AbstractDialect:
         return self.database.dialect
 
-    def compile(self, elem, params=None) -> str:
+
+    def compile(self, elem: Any, params: Optional[Dict[str, Any]] = None) -> str:
         if params:
             cv_params.set(params)
 
-        if self.root and isinstance(elem, Compilable) and not isinstance(elem, Root):
+        if self._is_root and isinstance(elem, Compilable) and not isinstance(elem, Root):
             from .ast_classes import Select
 
             elem = Select(columns=[elem])
 
         res = self._compile(elem)
-        if self.root and self._subqueries:
+        if self._is_root and self._subqueries:
             subq = ", ".join(f"\n  {k} AS ({v})" for k, v in self._subqueries.items())
             self._subqueries.clear()
             return f"WITH {subq}\n{res}"
+
         return res
+
+    def compile_with_args(self, elem: Any, params: Optional[Dict[str, Any]] = None) -> CompiledCode:
+        assert self._is_root
+
+        self = self.replace(_args_enabled=True)
+
+        res = self.compile(elem, params)
+
+        if self._args:
+            res, args = eval_template(res, self._args, self.dialect.ARG_SYMBOL)
+            self._args.clear()
+        else:
+            args = []
+
+        return CompiledCode(res, args)
+
+
+    def _add_as_param(self, elem):
+        if self._args_enabled:
+            name = self.new_unique_name()
+            self._args[name] = elem
+            return f"\xff[{name}]"
+
+        if isinstance(elem, bytes):
+            return f"b'{elem.decode()}'"
+        elif isinstance(elem, bytearray):
+            return f"'{elem.decode()}'"
+        elif isinstance(elem, (str, UUID)):
+            escaped = elem.replace("'", "''")
+            return f"'{escaped}'"
+
+        raise NotImplementedError()
 
     def _compile(self, elem) -> str:
         if elem is None:
             return "NULL"
+        elif isinstance(elem, UUID):
+            return f"'{elem}'"
+        elif isinstance(elem, ArithString):
+            return f"'{elem}'"
+        elif isinstance(elem, (str, bytes, bytearray)):
+            return self._add_as_param(elem)
         elif isinstance(elem, Compilable):
-            return elem.compile(self.replace(root=False))
-        elif isinstance(elem, (str, UUID)):
-            escaped = elem.replace("'", "''")
-            return f"'{escaped}'"
+            return elem.compile(self.replace(_is_root=False))
         elif isinstance(elem, (int, float)):
             return str(elem)
         elif isinstance(elem, datetime):
             return self.dialect.timestamp_value(elem)
         elif isinstance(elem, date):
             return self._compile(str(elem))
-        elif isinstance(elem, bytes):
-            return f"b'{elem.decode()}'"
-        elif isinstance(elem, bytearray):
-            return f"'{elem.decode()}'"
         elif isinstance(elem, decimal.Decimal):
             return str(elem)
-        elif isinstance(elem, ArithString):
-            return f"'{elem}'"
         elif elem is ...:
             return "*"
         assert False, elem
