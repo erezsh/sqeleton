@@ -80,7 +80,9 @@ class Compiler(AbstractCompiler):
     def compile_with_args(self, elem: Any, params: Optional[Dict[str, Any]] = None) -> CompiledCode:
         assert self._is_root
 
-        self = self.replace(_args_enabled=True)
+        if self.dialect.ARG_SYMBOL is not None:
+            # Only enable if the database supports args. Otherwise compile normally
+            self = self.replace(_args_enabled=True)
 
         res = self.compile(elem, params)
 

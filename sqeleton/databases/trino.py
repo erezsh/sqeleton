@@ -31,6 +31,7 @@ class Mixin_NormalizeValue(presto.Mixin_NormalizeValue):
 
 class Dialect(presto.Dialect):
     name = "Trino"
+    ARG_SYMBOL = "?"
 
 
 class Trino(presto.Presto):
