@@ -79,6 +79,7 @@ class Mixin_NormalizeValue(AbstractMixin_NormalizeValue):
 class Dialect(BaseDialect, Mixin_Schema):
     name = "Presto"
     ROUNDS_ON_PREC_LOSS = True
+    ARG_SYMBOL = "?"
     TYPE_CLASSES = {
         # Timestamps
         "timestamp with time zone": TimestampTZ,
