@@ -26,7 +26,7 @@ from sqeleton.queries.compiler import CompiledCode
 
 from ..utils import is_uuid, safezip, Self
 from ..queries import ExprNode, Compiler, table, Select, SKIP, T_SKIP, Explain, Code, this
-from ..queries.ast_classes import ForeignKey, Random, CompilableNode
+from ..queries.ast_classes import ForeignKey, Random, CompilableNode, TablePath
 from ..abcs.database_types import (
     AbstractDatabase,
     AbstractDialect,
@@ -118,7 +118,7 @@ class ThreadLocalInterpreter:
         self.gen = gen
         self.compiler = compiler
 
-    def apply_queries(self, callback: Callable[[CompiledCode], Any]) -> QueryResult:
+    def apply_queries(self, callback: Callable[[CompiledCode], Any]) -> None:
         q: ExprNode = next(self.gen)
         while True:
             sql = self.compiler.compile_with_args(q)
@@ -132,18 +132,22 @@ class ThreadLocalInterpreter:
             except StopIteration:
                 break
 
+SqlCode = Union[str, CompiledCode, ThreadLocalInterpreter]
+
 
 def apply_query(
-    callback: Callable[[CompiledCode], Any], sql_code: Union[CompiledCode, ThreadLocalInterpreter]
+    callback: Callable[[CompiledCode], Any], sql_code: SqlCode
 ) -> Optional[QueryResult]:
     if isinstance(sql_code, ThreadLocalInterpreter):
         return sql_code.apply_queries(callback)
-    else:
-        return callback(sql_code)
+    elif isinstance(sql_code, str):
+        sql_code = CompiledCode(sql_code, [])
+
+    return callback(sql_code)
 
 
 class Mixin_Schema(AbstractMixin_Schema):
-    def table_information(self) -> Compilable:
+    def table_information(self) -> TablePath:
         return table("information_schema", "tables")
 
     def list_tables(self, table_schema: str, like: Compilable = None) -> Compilable:
@@ -356,7 +360,7 @@ class Database(AbstractDatabase[T]):
                     return SKIP
 
         if self._interactive and isinstance(sql_ast, Select):
-            explained_sql = compiler.compile(Explain(sql_ast))
+            explained_sql = compiler.compile_with_args(Explain(sql_ast))
             explain = self._query(explained_sql)
             for row in explain:
                 # Most returned a 1-tuple. Presto returns a string
@@ -532,10 +536,7 @@ class Database(AbstractDatabase[T]):
             # logger.error(f'Caused by SQL: {sql_code}')
             raise
 
-    def _query_conn(self, conn, sql_code: Union[str, CompiledCode, ThreadLocalInterpreter]) -> Optional[QueryResult]:
-        if isinstance(sql_code, str):
-            sql_code = CompiledCode(sql_code, [])
-
+    def _query_conn(self, conn, sql_code: SqlCode) -> Optional[QueryResult]:
         c = conn.cursor()
         callback = partial(self._query_cursor, c)
         return apply_query(callback, sql_code)
@@ -579,11 +580,11 @@ class ThreadedDatabase(Database):
         except Exception as e:
             self._init_error = e
 
-    def _query(self, sql_code: Union[str, ThreadLocalInterpreter]) -> QueryResult:
+    def _query(self, sql_code: SqlCode) -> QueryResult:
         r = self._queue.submit(self._query_in_worker, sql_code)
         return r.result()
 
-    def _query_in_worker(self, sql_code: Union[str, ThreadLocalInterpreter]):
+    def _query_in_worker(self, sql_code: SqlCode):
         "This method runs in a worker thread"
         if self._init_error:
             raise self._init_error
