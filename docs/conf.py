@@ -25,6 +25,7 @@ sys.path.append(os.path.abspath("./_ext"))
 autodoc_member_order = "bysource"
 
 import builtins
+
 builtins.__sphinx_build__ = True
 
 # -- General configuration ------------------------------------------------
@@ -94,7 +95,7 @@ todo_include_todos = False
 
 autodoc_default_options = {
     # 'special-members': '__init__',
-    'exclude-members': 'json,aslist,astuple,replace',
+    "exclude-members": "json,aslist,astuple,replace",
 }
 
 # -- Options for HTML output ----------------------------------------------

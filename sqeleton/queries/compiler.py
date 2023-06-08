@@ -21,21 +21,26 @@ class CompileError(Exception):
 class Root:
     "Nodes inheriting from Root can be used as root statements in SQL (e.g. SELECT yes, RANDOM() no)"
 
+
 @dataclass
 class CompiledCode:
     code: str
     args: list[Any]
 
 
-
 import re
+
+
 def eval_template(query_template: str, data_dict: dict[str, Any], arg_symbol) -> tuple[str, list]:
     args = []
+
     def replace_match(match):
         varname = match.group(1)
         args.append(data_dict[varname])
         return arg_symbol
-    return re.sub('\xff' + r'\[(\w+)\]', replace_match, query_template), args
+
+    return re.sub("\xff" + r"\[(\w+)\]", replace_match, query_template), args
+
 
 @dataclass
 class Compiler(AbstractCompiler):
@@ -54,7 +59,6 @@ class Compiler(AbstractCompiler):
     @property
     def dialect(self) -> AbstractDialect:
         return self.database.dialect
-
 
     def compile(self, elem: Any, params: Optional[Dict[str, Any]] = None) -> str:
         if params:
@@ -87,7 +91,6 @@ class Compiler(AbstractCompiler):
             args = []
 
         return CompiledCode(res, args)
-
 
     def _add_as_param(self, elem):
         if self._args_enabled:

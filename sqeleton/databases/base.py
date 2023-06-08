@@ -133,7 +133,9 @@ class ThreadLocalInterpreter:
                 break
 
 
-def apply_query(callback: Callable[[CompiledCode], Any], sql_code: Union[CompiledCode, ThreadLocalInterpreter]) -> Optional[QueryResult]:
+def apply_query(
+    callback: Callable[[CompiledCode], Any], sql_code: Union[CompiledCode, ThreadLocalInterpreter]
+) -> Optional[QueryResult]:
     if isinstance(sql_code, ThreadLocalInterpreter):
         return sql_code.apply_queries(callback)
     else:
@@ -175,10 +177,8 @@ class BaseDialect(AbstractDialect):
     SUPPORTS_INDEXES = False
     TYPE_CLASSES: Dict[str, type] = {}
     MIXINS = frozenset()
-
+    ARG_SYMBOL = "%s"
     PLACEHOLDER_TABLE = None  # Used for Oracle
-
-    ARG_SYMBOL = "?"
 
     def offset_limit(self, offset: Optional[int] = None, limit: Optional[int] = None):
         if offset:
@@ -229,7 +229,6 @@ class BaseDialect(AbstractDialect):
     # def decl_repr(self, name, type_):
     #     if isinstance(type_, ForeignKey):
     #         return f"FOREIGN KEY ({name}) REFERENCES Persons(PersonID)"
-
 
     def _parse_type_repr(self, type_repr: str) -> Optional[Type[ColType]]:
         return self.TYPE_CLASSES.get(type_repr)
@@ -298,6 +297,7 @@ class BaseDialect(AbstractDialect):
 T = TypeVar("T", bound=BaseDialect)
 TRes = TypeVar("TRes")
 
+
 class Database(AbstractDatabase[T]):
     """Base abstract class for databases.
 
@@ -324,9 +324,9 @@ class Database(AbstractDatabase[T]):
         return compiler.compile(sql_ast)
 
     def query(
-            self,
-            sql_ast: Union[str, ExprNode, CompilableNode, Generator, List[CompilableNode]],
-            res_type: Optional[Type[TRes]] = None
+        self,
+        sql_ast: Union[str, ExprNode, CompilableNode, Generator, List[CompilableNode]],
+        res_type: Optional[Type[TRes]] = None,
     ) -> Union[Optional[TRes], T_SKIP]:
         """Query the given SQL code/AST, and attempt to convert the result to type 'res_type'
 

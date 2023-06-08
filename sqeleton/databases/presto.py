@@ -25,14 +25,15 @@ from .base import (
     CHECKSUM_HEXDIGITS,
     TIMESTAMP_PRECISION_POS,
 )
+from ..queries.compiler import CompiledCode
 
 
-def query_cursor(c, sql_code):
-    c.execute(sql_code)
-    if sql_code.lower().startswith("select"):
+def query_cursor(c, sql_code: CompiledCode):
+    c.execute(sql_code.code, sql_code.args)
+    if sql_code.code.lower().startswith("select"):
         return c.fetchall()
     # Required for the query to actually run 🤯
-    if re.match(r"(insert|create|truncate|drop|explain)", sql_code, re.IGNORECASE):
+    if re.match(r"(insert|create|truncate|drop|explain)", sql_code.code, re.IGNORECASE):
         return c.fetchone()
 
 

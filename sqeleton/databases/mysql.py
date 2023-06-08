@@ -59,7 +59,6 @@ class Dialect(BaseDialect, Mixin_Schema, Mixin_OptimizerHints):
     ROUNDS_ON_PREC_LOSS = True
     SUPPORTS_PRIMARY_KEY = True
     SUPPORTS_INDEXES = True
-    ARG_SYMBOL = "%s"
 
     TYPE_CLASSES = {
         # Dates
