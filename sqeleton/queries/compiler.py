@@ -1,15 +1,16 @@
 import random
 from datetime import datetime, date
-from typing import Any, Dict, Sequence, List, Optional
+from typing import Any, Dict, Sequence, List, Optional, Tuple
 from uuid import UUID
 import decimal
+import re
+import contextvars
 
 from runtype import dataclass
 
 from ..utils import ArithString
 from ..abcs import AbstractDatabase, AbstractDialect, DbPath, AbstractCompiler, Compilable
 
-import contextvars
 
 cv_params = contextvars.ContextVar("params")
 
@@ -25,13 +26,10 @@ class Root:
 @dataclass
 class CompiledCode:
     code: str
-    args: list[Any]
+    args: List[Any]
 
 
-import re
-
-
-def eval_template(query_template: str, data_dict: dict[str, Any], arg_symbol) -> tuple[str, list]:
+def eval_template(query_template: str, data_dict: Dict[str, Any], arg_symbol) -> Tuple[str, list]:
     args = []
 
     def replace_match(match):
