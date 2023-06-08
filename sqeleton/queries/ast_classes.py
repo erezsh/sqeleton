@@ -35,7 +35,6 @@ def cache(user_function, /):
     return lru_cache(maxsize=None)(user_function)
 
 
-
 class CompilableNode(Compilable):
     "Base class for query expression nodes"
 
@@ -463,8 +462,9 @@ class Column(ExprNode, LazyOps):
         if c._table_context:
             if len(c._table_context) > 1:
                 aliases = [
-                    t for t in c._table_context if isinstance(t, TableAlias)
-                    and (t.source_table is self.source_table or t is self.source_table)
+                    t
+                    for t in c._table_context
+                    if isinstance(t, TableAlias) and (t.source_table is self.source_table or t is self.source_table)
                 ]
                 if not aliases:
                     return c.quote(self.name)
@@ -476,8 +476,6 @@ class Column(ExprNode, LazyOps):
                 return f"{c.quote(alias.name)}.{c.quote(self.name)}"
 
         return c.quote(self.name)
-
-
 
 
 class ExprTable(ExprNode, ITable):
@@ -642,8 +640,9 @@ class TableAlias(ExprNode, ITable):
         return self.source_table.schema
 
 
-
 ColumnsDef = Sequence[Union[Expr, ellipsis]]
+
+
 def _expand_ellipsis(schema: dict, columns: ColumnsDef):
     for c in columns:
         if c is ...:
@@ -652,11 +651,13 @@ def _expand_ellipsis(schema: dict, columns: ColumnsDef):
         else:
             yield c.name, c.type
 
+
 def _union_dicts(*ds):
     unioned = {}
     for d in ds:
         unioned.update(d)
     return unioned
+
 
 @dataclass
 class Join(ExprNode, ITable, Root):
@@ -798,9 +799,7 @@ class GroupBy(ExprNode, ITable, Root):
         having_str = (
             " HAVING " + " AND ".join(map(c.compile, self.having_exprs)) if self.having_exprs is not None else ""
         )
-        select = (
-            f"SELECT {columns_str} FROM {SelectCompiler(c).compile(self.table)} GROUP BY {keys_str}{having_str}"
-        )
+        select = f"SELECT {columns_str} FROM {SelectCompiler(c).compile(self.table)} GROUP BY {keys_str}{having_str}"
 
         if c.in_select:
             select = f"({select})"
@@ -843,13 +842,14 @@ class SelectCompiler(AbstractCompiler):
 
     def compile(self, elem: Any, params: Dict[str, Any] = None) -> str:
         if isinstance(elem, (Select, TableOp, GroupBy, Join)):
-            elem = TableAlias(elem, self.c.new_unique_name()) 
+            elem = TableAlias(elem, self.c.new_unique_name())
         c = self.c.replace(in_select=True)
         return c.compile(elem, params)
 
     @property
     def dialect(self):
         return self.c.dialect
+
 
 @dataclass
 class Select(ExprTable, Root):

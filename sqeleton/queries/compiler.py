@@ -1,15 +1,16 @@
 import random
 from datetime import datetime, date
-from typing import Any, Dict, Sequence, List, Optional
+from typing import Any, Dict, Sequence, List, Optional, Tuple
 from uuid import UUID
 import decimal
+import re
+import contextvars
 
 from runtype import dataclass
 
 from ..utils import ArithString
 from ..abcs import AbstractDatabase, AbstractDialect, DbPath, AbstractCompiler, Compilable
 
-import contextvars
 
 cv_params = contextvars.ContextVar("params")
 
@@ -21,21 +22,23 @@ class CompileError(Exception):
 class Root:
     "Nodes inheriting from Root can be used as root statements in SQL (e.g. SELECT yes, RANDOM() no)"
 
+
 @dataclass
 class CompiledCode:
     code: str
-    args: list[Any]
+    args: List[Any]
 
 
-
-import re
-def eval_template(query_template: str, data_dict: dict[str, Any], arg_symbol) -> tuple[str, list]:
+def eval_template(query_template: str, data_dict: Dict[str, Any], arg_symbol) -> Tuple[str, list]:
     args = []
+
     def replace_match(match):
         varname = match.group(1)
         args.append(data_dict[varname])
         return arg_symbol
-    return re.sub('\xff' + r'\[(\w+)\]', replace_match, query_template), args
+
+    return re.sub("\xff" + r"\[(\w+)\]", replace_match, query_template), args
+
 
 @dataclass
 class Compiler(AbstractCompiler):
@@ -54,7 +57,6 @@ class Compiler(AbstractCompiler):
     @property
     def dialect(self) -> AbstractDialect:
         return self.database.dialect
-
 
     def compile(self, elem: Any, params: Optional[Dict[str, Any]] = None) -> str:
         if params:
@@ -76,7 +78,9 @@ class Compiler(AbstractCompiler):
     def compile_with_args(self, elem: Any, params: Optional[Dict[str, Any]] = None) -> CompiledCode:
         assert self._is_root
 
-        self = self.replace(_args_enabled=True)
+        if self.dialect.ARG_SYMBOL is not None:
+            # Only enable if the database supports args. Otherwise compile normally
+            self = self.replace(_args_enabled=True)
 
         res = self.compile(elem, params)
 
@@ -87,7 +91,6 @@ class Compiler(AbstractCompiler):
             args = []
 
         return CompiledCode(res, args)
-
 
     def _add_as_param(self, elem):
         if self._args_enabled:
