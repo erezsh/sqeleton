@@ -22,7 +22,7 @@ from ..abcs.database_types import (
     Boolean,
 )
 from ..abcs.mixins import AbstractMixin_MD5, AbstractMixin_NormalizeValue
-from .base import BaseDialect, Database, QueryResult, import_helper, ThreadLocalInterpreter, Mixin_Schema, Mixin_RandomSample, SqlCode
+from .base import BaseDialect, Database, QueryResult, import_helper, ThreadLocalInterpreter, Mixin_Schema, Mixin_RandomSample, SqlCode, logger
 from .base import (
     MD5_HEXDIGITS,
     CHECKSUM_HEXDIGITS,
@@ -32,11 +32,12 @@ from ..queries.compiler import CompiledCode
 
 
 def query_cursor(c, sql_code: CompiledCode) -> Optional[QueryResult]:
+    logger.debug(f"[Presto] Executing SQL: {sql_code.code} || {sql_code.args}")
     c.execute(sql_code.code, sql_code.args)
     if sql_code.code.lower().startswith("select"):
-        columns = [col[0] for col in c.description]
-        return QueryResult(c.fetchall(), columns)
-        # return c.fetchall()
+        # columns = [col[0] for col in c.description]
+        # return QueryResult(c.fetchall(), columns)
+        return c.fetchall()
     # Required for the query to actually run 🤯
     if re.match(r"(insert|create|truncate|drop|explain)", sql_code.code, re.IGNORECASE):
         return c.fetchone()
