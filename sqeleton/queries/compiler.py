@@ -5,6 +5,8 @@ from uuid import UUID
 import decimal
 import re
 import contextvars
+from dataclasses import is_dataclass 
+import json
 
 from runtype import dataclass
 
@@ -129,6 +131,9 @@ class Compiler(AbstractCompiler):
             return str(elem)
         elif elem is ...:
             return "*"
+        elif is_dataclass(elem):
+            return self._add_as_param(json.dumps(elem.json()))
+        
         assert False, elem
 
     def new_unique_name(self, prefix="tmp"):
@@ -140,7 +145,7 @@ class Compiler(AbstractCompiler):
         return self.database.parse_table_name(f"{prefix}{self._counter[0]}_{'%x'%random.randrange(2**32)}")
 
     def add_table_context(self, *tables: Sequence, **kw):
-        new_context = self._table_context + list(tables)
+        new_context = self._table_context + list(filter(None, tables))
         if len({t.name for t in new_context}) < len(new_context):
             raise ValueError("Duplicate table alias", {t.name for t in new_context})
         return self.replace(_table_context=new_context, **kw)
