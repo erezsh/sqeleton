@@ -121,7 +121,7 @@ def max_(expr: Expr):
 
 def exists(expr: Expr):
     """Call EXISTS(expr)"""
-    return Func("exists", [expr])
+    return Exists(expr)
 
 
 def if_(cond: Expr, then: Expr, else_: Optional[Expr] = None):

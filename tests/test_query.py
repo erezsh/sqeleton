@@ -271,9 +271,13 @@ class TestQuery(unittest.TestCase):
         q = c.compile(t.group_by(this.b).agg(this.c, this.d).having(this.b.sum() > 1))
         self.assertEqual(q, "SELECT b, c, d FROM a GROUP BY 1 HAVING (SUM(b) > 1)")
 
+    def test_group_by2(self):
+        c = Compiler(MockDatabase())
+        t = table("a")
+
         # Select interaction
         q = c.compile(t.select(this.a).group_by(this.b).agg(this.c).select(this.c + 1))
-        self.assertEqual(q, "SELECT (c + 1) FROM (SELECT b, c FROM (SELECT a FROM a) tmp4 GROUP BY 1) tmp3")
+        self.assertEqual(q, "SELECT (c + 1) FROM (SELECT b, c FROM (SELECT a FROM a) tmp2 GROUP BY 1) tmp1")
 
     def test_case_when(self):
         c = Compiler(MockDatabase())

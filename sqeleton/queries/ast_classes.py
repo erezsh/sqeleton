@@ -244,6 +244,9 @@ class LazyOps:
     def __neg__(self):
         return UnaryOp("-", self)
 
+    def not_(self):
+        return UnaryOp("NOT ", self)
+
     def __gt__(self, other):
         return BinBoolOp(">", [self, other])
 
@@ -449,7 +452,7 @@ class BinBoolOp(BinOp):
 
 @_dataclass(eq=False, order=False)
 class Column(ExprNode, LazyOps):
-    source_table: ITable
+    source_table: ITable    # TODO: TablePath
     name: str
 
     @property
@@ -461,6 +464,16 @@ class Column(ExprNode, LazyOps):
     def compile(self, c: Compiler) -> str:
         if c._table_context:
             if len(c._table_context) > 1:
+                possible_owners = [t for t in c._table_context if t.schema is None or self.name in t.schema]
+                if len(possible_owners) > 1:
+                    owners = [t for t in possible_owners if t is self.source_table]
+                    if owners:
+                        owner ,= owners
+                        if isinstance(owner, TablePath):
+                            return f"{c.compile(owner)}.{c.quote(self.name)}"
+                        elif isinstance(owner, TableAlias):
+                            return f"{c.quote(owner.name)}.{c.quote(self.name)}"
+
                 aliases = [
                     t
                     for t in c._table_context
@@ -490,6 +503,10 @@ class TablePath(ExprTable):
     @property
     def source_table(self):
         return self
+
+    @property
+    def name(self):
+        return self.path[-1]
 
     def to_string(self, dialect: AbstractDialect):
         return ".".join(map(dialect.quote, self.path))
@@ -567,7 +584,7 @@ class TablePath(ExprTable):
                 columns = keys
             elif not (set(columns) <= set(rows[0].keys())):
                 raise ValueError("Keys in dictionary are not a subset of 'columns'")
-            rows = [[row[k] for k in columns] for row in rows]
+            rows = [[row.get(k) for k in columns] for row in rows]
 
         return InsertToTable(self, ConstantTable(rows), columns=columns)
 
@@ -628,7 +645,7 @@ class ForeignKey:
 
 
 @dataclass
-class TableAlias(ExprNode, ITable):
+class TableAlias(ExprTable):
     source_table: ITable
     name: str
 
@@ -639,6 +656,15 @@ class TableAlias(ExprNode, ITable):
     def schema(self):
         return self.source_table.schema
 
+@dataclass
+class Exists(ExprNode, LazyOps):
+    expr: ITable
+
+    type = bool
+
+    def compile(self, c: Compiler) -> str:
+        c = c.replace(in_select=False)
+        return f"EXISTS ({c.compile(self.expr)})"
 
 ColumnsDef = Sequence[Union[Expr, ellipsis]]
 
@@ -693,6 +719,11 @@ class Join(ExprNode, ITable, Root):
         exprs = _drop_skips(exprs)
         if not exprs:
             return self
+
+        exprs = [BinBoolOp('=', [t[e] for t in self.source_tables])
+                 if isinstance(e, str)
+                 else e
+                 for e in exprs]
 
         return self.replace(on_exprs=(self.on_exprs or []) + exprs)
 
@@ -850,6 +881,9 @@ class SelectCompiler(AbstractCompiler):
     def dialect(self):
         return self.c.dialect
 
+    def add_table_context(self, *tables: Sequence, **kw):
+        return SelectCompiler(self.c.add_table_context(*tables, **kw))
+
 
 @dataclass
 class Select(ExprTable, Root):
@@ -877,6 +911,9 @@ class Select(ExprTable, Root):
 
     def compile(self, parent_c: Compiler) -> str:
         c = SelectCompiler(parent_c)
+
+        if isinstance(self.table, (TablePath,)):
+            c = c.add_table_context(self.table)
 
         columns = ", ".join(map(c.compile, self.columns)) if self.columns else "*"
         distinct = "DISTINCT " if self.distinct else ""
