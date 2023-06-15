@@ -14,6 +14,7 @@ from typing import (
     Union,
     TypeVar,
     Type,
+    overload
 )
 from functools import partial, wraps
 from concurrent.futures import ThreadPoolExecutor
@@ -302,6 +303,8 @@ T = TypeVar("T", bound=BaseDialect)
 TRes = TypeVar("TRes")
 
 
+QueryInput = Union[str, ExprNode, CompilableNode, Generator, List[CompilableNode]]
+
 class Database(AbstractDatabase[T]):
     """Base abstract class for databases.
 
@@ -327,11 +330,19 @@ class Database(AbstractDatabase[T]):
         compiler = Compiler(self)
         return compiler.compile(sql_ast)
 
-    def query(
-        self,
-        sql_ast: Union[str, ExprNode, CompilableNode, Generator, List[CompilableNode]],
-        res_type: Optional[Type[TRes]] = None,
-    ) -> Union[Optional[TRes], T_SKIP]:
+    @overload
+    def query(self, query_input: QueryInput) -> Any:
+        ...
+
+    @overload
+    def query(self, query_input: QueryInput, res_type: None) -> Any:
+        ...
+
+    @overload
+    def query(self, query_input: QueryInput, res_type: Type[TRes]) -> TRes:
+        ...
+
+    def query(self, query_input, res_type = None):
         """Query the given SQL code/AST, and attempt to convert the result to type 'res_type'
 
         If given a generator:
@@ -339,28 +350,28 @@ class Database(AbstractDatabase[T]):
             The results of the queries are returned by the `yield` stmt (using the .send() mechanism).
             It's a cleaner approach than exposing cursors, but may not be enough in all cases.
         """
-        if sql_ast is SKIP:
+        if query_input is SKIP:
             return
 
         compiler = Compiler(self)
-        if isinstance(sql_ast, Generator):
-            sql_code = ThreadLocalInterpreter(compiler, sql_ast)
-        elif isinstance(sql_ast, list):
-            for i in sql_ast[:-1]:
+        if isinstance(query_input, Generator):
+            sql_code = ThreadLocalInterpreter(compiler, query_input)
+        elif isinstance(query_input, list):
+            for i in query_input[:-1]:
                 self.query(i)
-            return self.query(sql_ast[-1], res_type)
+            return self.query(query_input[-1], res_type)
         else:
-            if isinstance(sql_ast, str):
-                sql_code = sql_ast
+            if isinstance(query_input, str):
+                sql_code = query_input
             else:
                 if res_type is None:
-                    res_type = sql_ast.type
-                sql_code = compiler.compile_with_args(sql_ast)
+                    res_type = query_input.type
+                sql_code = compiler.compile_with_args(query_input)
                 if sql_code is SKIP:
                     return SKIP
 
-        if self._interactive and isinstance(sql_ast, Select):
-            explained_sql = compiler.compile_with_args(Explain(sql_ast))
+        if self._interactive and isinstance(query_input, Select):
+            explained_sql = compiler.compile_with_args(Explain(query_input))
             explain = self._query(explained_sql)
             for row in explain:
                 # Most returned a 1-tuple. Presto returns a string
