@@ -61,7 +61,7 @@ class ExprNode(CompilableNode):
 
 
 # Query expressions can only interact with objects that are an instance of 'Expr'
-Expr = Union[ExprNode, str, bool, int, float, datetime, ArithString, None]
+Expr = Union[ExprNode, str, bytes, bool, int, float, datetime, ArithString, None]
 
 
 @dataclass
