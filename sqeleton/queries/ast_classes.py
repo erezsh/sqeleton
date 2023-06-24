@@ -1,10 +1,10 @@
 from dataclasses import field
 from datetime import datetime
-from typing import Any, Generator, List, Optional, Sequence, Union, Dict, Literal
+from typing import Any, Generator, List, Optional, Sequence, Union, Dict, Literal, overload
 from collections import ChainMap
 from functools import lru_cache
 
-from runtype import dataclass as _dataclass, cv_type_checking
+from runtype import dataclass as _dataclass, cv_type_checking, isa
 
 from ..utils import join_iter, ArithString
 from ..abcs import AbstractCompiler, Compilable
@@ -49,7 +49,7 @@ class CompilableNode(Compilable):
             if not isinstance(vs, (list, tuple)):
                 vs = [vs]
             for v in vs:
-                if isinstance(v, ExprNode):
+                if isinstance(v, CompilableNode):
                     yield from v._dfs_values()
 
 
@@ -108,7 +108,7 @@ class ITable(AbstractTable):
     source_table: Any
     schema: Schema = None
 
-    def select(self, *exprs, distinct=SKIP, optimizer_hints=SKIP, **named_exprs) -> "Select":
+    def select(self, *exprs: Expr, distinct: bool=SKIP, optimizer_hints=SKIP, **named_exprs) -> "Select":
         """Create a new table with the specified fields"""
         exprs = args_as_tuple(exprs)
         exprs = _drop_skips(exprs)
@@ -163,8 +163,13 @@ class ITable(AbstractTable):
     #     return self._get_column(column)
 
     def __getitem__(self, column):
+        if isinstance(column, (list, tuple)):
+            return [self[c] for c in column]
+        elif column is ...:
+            assert self.schema
+            return [self[k] for k in self.schema]
         if not isinstance(column, str):
-            raise TypeError()
+            raise TypeError(column)
         return self._get_column(column)
 
     def count(self):
@@ -232,6 +237,9 @@ class LazyOps:
     def __sub__(self, other):
         return BinOp("-", [self, other])
 
+    def __rsub__(self, other):
+        return BinOp("-", [other, self])
+
     def __mul__(self, other):
         return BinOp("*", [self, other])
 
@@ -289,6 +297,9 @@ class LazyOps:
     def like(self, other):
         return BinBoolOp("LIKE", [self, other])
 
+    def ilike(self, other):
+        return BinBoolOp("ILIKE", [self, other])
+
     def in_(self, *others):
         others = args_as_tuple(others)
         assert isinstance(others, tuple), f"Only lists of constants are supported for now, not {others}"
@@ -304,8 +315,9 @@ class LazyOps:
     def sum(self):
         return Func("SUM", [self])
 
-    def count(self):
-        return Func("COUNT", [self])
+    def count(self, distinct=False):
+        # return Func("COUNT", [self])
+        return Count(self, distinct=distinct)
 
     def max(self):
         return Func("MAX", [self])
@@ -330,6 +342,7 @@ class TestRegex(ExprNode, LazyOps):
 class Func(ExprNode, LazyOps):
     name: str
     args: Sequence[Expr]
+    ret_type: type = None
 
     def compile(self, c: Compiler) -> str:
         args = ", ".join(c.compile(e) for e in self.args)
@@ -550,7 +563,7 @@ class TablePath(ExprTable):
         """Returns a query expression to truncate the table. (remove all rows)"""
         return TruncateTable(self)
 
-    def delete_rows(self, *where_exprs: Expr):
+    def delete_rows(self, *where_exprs: Union[Expr, Literal[SKIP]]):
         where_exprs = args_as_tuple(where_exprs)
         where_exprs = _drop_skips(where_exprs)
         if not where_exprs:
@@ -579,6 +592,7 @@ class TablePath(ExprTable):
             return SKIP
 
         if isinstance(rows[0], dict):
+            # TODO: Validate all rows are the same?
             keys = list(rows[0].keys())
             if not columns:
                 columns = keys
@@ -727,11 +741,15 @@ class Join(ExprNode, ITable, Root):
 
         return self.replace(on_exprs=(self.on_exprs or []) + exprs)
 
-    def select(self, *exprs, **named_exprs) -> "Join":
+    def select(self, *exprs: Expr, **named_exprs) -> "Join":
         """Select fields to return from the JOIN operation
 
         See Also: ``ITable.select()``
         """
+        for e in exprs:
+            if not isa(e, Expr):
+                raise TypeError(e)
+
         if self.columns is not None:
             # join-select already applied
             return super().select(*exprs, **named_exprs)
@@ -770,8 +788,8 @@ class Join(ExprNode, ITable, Root):
 @dataclass
 class GroupBy(ExprNode, ITable, Root):
     table: ITable
-    keys: Sequence[Expr] = None  # IKey?
-    values: Sequence[Expr] = None
+    keys_: Sequence[Expr] = None  # IKey?
+    values_: Sequence[Expr] = None
     having_exprs: Sequence[Expr] = None
 
     @property
@@ -784,10 +802,10 @@ class GroupBy(ExprNode, ITable, Root):
         s = self.table.schema
         if s is None:
             return None
-        return type(s)({c.name: c.type for c in self.keys + self.values})
+        return type(s)({c.name: c.type for c in self.keys_ + self.values_})
 
     def __post_init__(self):
-        assert self.keys or self.values
+        assert self.keys_ or self.values_
 
     def having(self, *exprs):
         """Add a 'HAVING' clause to the group-by"""
@@ -808,14 +826,14 @@ class GroupBy(ExprNode, ITable, Root):
         exprs += _named_exprs_as_aliases(named_exprs)
 
         resolve_names(self.table, exprs)
-        return self.replace(values=(self.values or []) + exprs)
+        return self.replace(values_=(self.values_ or []) + exprs)
 
     def compile(self, c: Compiler) -> str:
-        if self.values is None:
+        if self.values_ is None:
             raise CompileError(".group_by() must be followed by a call to .agg()")
 
-        keys = [str(i + 1) for i in range(len(self.keys))]
-        columns = (self.keys or []) + (self.values or [])
+        keys = [str(i + 1) for i in range(len(self.keys_))]
+        columns = (self.keys_ or []) + (self.values_ or [])
         if isinstance(self.table, Select) and not self.table.columns and self.table.group_by_exprs is None:
             return c.compile(
                 self.table.replace(
@@ -949,26 +967,29 @@ class Select(ExprTable, Root):
     def make(cls, table: ITable, distinct: bool = SKIP, optimizer_hints: str = SKIP, **kwargs):
         assert "table" not in kwargs
 
-        if not isinstance(table, cls):  # If not Select
-            if distinct is not SKIP:
-                kwargs["distinct"] = distinct
-            if optimizer_hints is not SKIP:
-                kwargs["optimizer_hints"] = optimizer_hints
+        if optimizer_hints is not SKIP:
+            kwargs["optimizer_hints"] = optimizer_hints
+        if distinct is not SKIP:
+            kwargs["distinct"] = distinct
+
+        # If table is not a select, return a new Select instance
+        if not isinstance(table, cls):
+            return cls(table, **kwargs)
+        
+        if 'columns' in kwargs and table.columns is not None:
             return cls(table, **kwargs)
 
         # We can safely assume isinstance(table, Select)
-        if optimizer_hints is not SKIP:
-            kwargs["optimizer_hints"] = optimizer_hints
-
-        if distinct is not SKIP:
-            if distinct is False and table.distinct:
-                return cls(table, **kwargs)
-            kwargs["distinct"] = distinct
-
-        if table.limit_expr or table.group_by_exprs:
+        # We will try to merge them, instead of creating nested instances
+        if distinct is False and table.distinct:
+            # Cannot merge the selects
             return cls(table, **kwargs)
 
-        # Fill in missing attributes, instead of nesting instances
+        if table.limit_expr or table.group_by_exprs:
+            # Cannot merge the selects
+            return cls(table, **kwargs)
+
+        # Fill in missing attributes
         for k, v in kwargs.items():
             if getattr(table, k) is not None:
                 if k == "where_exprs":  # Additive attribute
@@ -1045,6 +1066,20 @@ class _ResolveColumn(ExprNode, LazyOps):
     def name(self):
         return self._get_resolved().name
 
+    def __rsub__(self, other):
+        if other is ...:
+            # return Wildcard()
+            pass
+
+        return super().__rsub__(other)
+
+
+
+
+@dataclass
+class Wildcard:
+    exclude: List[str]
+
 
 class This:
     """Builder object for accessing table attributes.
@@ -1054,6 +1089,12 @@ class This:
 
     def __getattr__(self, name):
         return _ResolveColumn(name)
+
+    @overload
+    def __getitem__(self, name: str) -> 'This': ...
+    @overload
+    def __getitem__(self, name: (list, tuple)) -> List['This']:
+        ...
 
     def __getitem__(self, name):
         if isinstance(name, (list, tuple)):
