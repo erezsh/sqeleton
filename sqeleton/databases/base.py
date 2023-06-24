@@ -26,7 +26,7 @@ from runtype import dataclass
 from sqeleton.queries.compiler import CompiledCode
 
 from ..utils import is_uuid, safezip, Self
-from ..queries import ExprNode, Compiler, table, Select, SKIP, T_SKIP, Explain, Code, this
+from ..queries import ExprNode, Compiler, table, Select, SKIP, T_SKIP, Explain, Code, this, commit
 from ..queries.ast_classes import ForeignKey, Random, CompilableNode, TablePath
 from ..abcs.database_types import (
     AbstractDatabase,
@@ -303,7 +303,8 @@ T = TypeVar("T", bound=BaseDialect)
 TRes = TypeVar("TRes")
 
 
-QueryInput = Union[str, ExprNode, CompilableNode, Generator, List[CompilableNode]]
+QueryInputItem = Union[CompilableNode, T_SKIP]
+QueryInput = Union[str, QueryInputItem, Generator, List[QueryInputItem]]
 
 class Database(AbstractDatabase[T]):
     """Base abstract class for databases.
@@ -329,6 +330,12 @@ class Database(AbstractDatabase[T]):
     def compile(self, sql_ast):
         compiler = Compiler(self)
         return compiler.compile(sql_ast)
+
+    # def set_logger_level(self, level: Union[str, int]):
+    #     if isinstance(level, str):
+    #         level = getattr(logging, level)
+
+    #     logger.setLevel(level)
 
     @overload
     def query(self, query_input: QueryInput) -> Any:
@@ -570,6 +577,9 @@ class Database(AbstractDatabase[T]):
 
         _DatabaseWithMixins.__name__ = cls.__name__
         return _DatabaseWithMixins
+
+    def commit(self):
+        return self.query(commit)
 
 
 class ThreadedDatabase(Database):
