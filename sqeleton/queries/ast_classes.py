@@ -49,7 +49,7 @@ class CompilableNode(Compilable):
             if not isinstance(vs, (list, tuple)):
                 vs = [vs]
             for v in vs:
-                if isinstance(v, ExprNode):
+                if isinstance(v, CompilableNode):
                     yield from v._dfs_values()
 
 
@@ -788,8 +788,8 @@ class Join(ExprNode, ITable, Root):
 @dataclass
 class GroupBy(ExprNode, ITable, Root):
     table: ITable
-    keys: Sequence[Expr] = None  # IKey?
-    values: Sequence[Expr] = None
+    keys_: Sequence[Expr] = None  # IKey?
+    values_: Sequence[Expr] = None
     having_exprs: Sequence[Expr] = None
 
     @property
@@ -802,10 +802,10 @@ class GroupBy(ExprNode, ITable, Root):
         s = self.table.schema
         if s is None:
             return None
-        return type(s)({c.name: c.type for c in self.keys + self.values})
+        return type(s)({c.name: c.type for c in self.keys_ + self.values_})
 
     def __post_init__(self):
-        assert self.keys or self.values
+        assert self.keys_ or self.values_
 
     def having(self, *exprs):
         """Add a 'HAVING' clause to the group-by"""
@@ -826,14 +826,14 @@ class GroupBy(ExprNode, ITable, Root):
         exprs += _named_exprs_as_aliases(named_exprs)
 
         resolve_names(self.table, exprs)
-        return self.replace(values=(self.values or []) + exprs)
+        return self.replace(values_=(self.values_ or []) + exprs)
 
     def compile(self, c: Compiler) -> str:
-        if self.values is None:
+        if self.values_ is None:
             raise CompileError(".group_by() must be followed by a call to .agg()")
 
-        keys = [str(i + 1) for i in range(len(self.keys))]
-        columns = (self.keys or []) + (self.values or [])
+        keys = [str(i + 1) for i in range(len(self.keys_))]
+        columns = (self.keys_ or []) + (self.values_ or [])
         if isinstance(self.table, Select) and not self.table.columns and self.table.group_by_exprs is None:
             return c.compile(
                 self.table.replace(
