@@ -1078,7 +1078,7 @@ class _ResolveColumn(ExprNode, LazyOps):
 
 @dataclass
 class Wildcard:
-    exclude: list[str]
+    exclude: List[str]
 
 
 class This:
