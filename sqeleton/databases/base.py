@@ -48,6 +48,7 @@ from ..abcs.database_types import (
     DbPath,
     Boolean,
 )
+from ..schema import Options
 from ..abcs.mixins import Compilable
 from ..abcs.mixins import (
     AbstractMixin_Schema,
@@ -142,7 +143,7 @@ def apply_query(
     if isinstance(sql_code, ThreadLocalInterpreter):
         return sql_code.apply_queries(callback)
     elif isinstance(sql_code, str):
-        sql_code = CompiledCode(sql_code, [])
+        sql_code = CompiledCode(sql_code, [], None) # Unknown type. #TODO: Should we guess?
 
     return callback(sql_code)
 
@@ -390,9 +391,11 @@ class Database(AbstractDatabase[T]):
                 sys.exit(1)
 
         res = self._query(sql_code)
-        if res is None:
-            assert res_type is None
-            return
+        if res_type == None:
+            pass    # Do no casting
+        elif res is None:
+            assert res_type is not None
+            raise ValueError(f"Query returned NULL, but query() is expecting type {res_type}")
         elif res_type is list:
             return list(res)
         elif res_type in (int, str):
@@ -424,6 +427,12 @@ class Database(AbstractDatabase[T]):
                 (elem_type,) = res_type.__args__
                 return [elem_type(**dict(safezip(res.columns, row))) for row in res]
                 # raise ValueError(res_type)
+        else:
+            if len(res) == 0:
+                return None     # TODO: Only allow if res_type is Optional
+            assert len(res) == 1, len(res)
+            d = dict(safezip(res.columns, res[0]))
+            return res_type(**d)
         return res
 
     def enable_interactive(self):
@@ -546,8 +555,9 @@ class Database(AbstractDatabase[T]):
         try:
             logger.debug(f"{self.name} Executing SQL: {sql_code.code} || {sql_code.args}")
             c.execute(sql_code.code, sql_code.args)
-            if sql_code.code.lstrip().lower().startswith(("select", "explain", "show", "with")):
-                columns = [col[0] for col in c.description]
+            # insert, delete and update may return values if they have the "returning" clause.
+            if sql_code.type is not None or sql_code.code.lstrip().lower().startswith(("select", "explain", "show", "with")):
+                columns = c.description and [col[0] for col in c.description]
                 return QueryResult(c.fetchall(), columns)
         except Exception as _e:
             # logger.exception(e)

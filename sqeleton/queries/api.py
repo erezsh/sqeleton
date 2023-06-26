@@ -3,6 +3,7 @@ from typing import Optional
 from ..utils import CaseAwareMapping, CaseSensitiveDict
 from .ast_classes import *
 from .base import args_as_tuple
+from ..schema import SchemaInput, _Schema
 
 
 this = This()
@@ -57,7 +58,7 @@ def cte(expr: Expr, *, name: Optional[str] = None, params: Sequence[str] = None)
     return Cte(expr, name, params)
 
 
-def table(*path: str, schema: Union[dict, CaseAwareMapping] = None) -> TablePath:
+def table(*path: str, schema: SchemaInput = None) -> TablePath:
     """Defines a table with a path (dotted name), and optionally a schema.
 
     Parameters:
@@ -68,9 +69,9 @@ def table(*path: str, schema: Union[dict, CaseAwareMapping] = None) -> TablePath
         (path,) = path
     if not all(isinstance(i, str) for i in path):
         raise TypeError(f"All elements of table path must be of type 'str'. Got: {path}")
-    if schema and not isinstance(schema, CaseAwareMapping):
-        assert isinstance(schema, dict)
-        schema = CaseSensitiveDict(schema)
+
+    if schema:
+        schema = _Schema.make(schema)
     return TablePath(path, schema)
 
 

@@ -10,7 +10,7 @@ from ..utils import join_iter, ArithString
 from ..abcs import AbstractCompiler, Compilable
 from ..abcs.database_types import AbstractTable, AbstractDialect
 from ..abcs.mixins import AbstractMixin_Regex, AbstractMixin_TimeTravel
-from ..schema import Schema
+from ..schema import Schema, TableType, Options, _Field
 
 from .compiler import Compiler, cv_params, Root, CompileError
 from .base import SKIP, DbPath, args_as_tuple, SqeletonError
@@ -61,7 +61,7 @@ class ExprNode(CompilableNode):
 
 
 # Query expressions can only interact with objects that are an instance of 'Expr'
-Expr = Union[ExprNode, str, bytes, bool, int, float, datetime, ArithString, None]
+Expr = Union[ExprNode, str, bytes, bool, int, float, datetime, ArithString, None, dict, list]
 
 
 @dataclass
@@ -611,7 +611,14 @@ class TablePath(ExprTable):
         if (not values) == (not kw):
             raise ValueError("Must provide either positional arguments or keyword arguments, but not a mix of both.")
         if values:
-            return InsertToTable(self, ConstantTable([values]), columns=columns)
+            if len(values) == 1 and isinstance(values[0], TableType):
+                assert columns is None
+                kw = {k:v.default if isinstance(v, Options) else v
+                      for k, v in values[0]
+                      if not (isinstance(v, Options) and v.auto)
+                      }
+            else:
+                return InsertToTable(self, ConstantTable([values]), columns=columns)
 
         assert kw
         assert not columns
@@ -680,10 +687,10 @@ class Exists(ExprNode, LazyOps):
         c = c.replace(in_select=False)
         return f"EXISTS ({c.compile(self.expr)})"
 
-ColumnsDef = Sequence[Union[Expr, ellipsis]]
+SelectColumns = Sequence[Union[Expr, ellipsis]]
 
 
-def _expand_ellipsis(schema: dict, columns: ColumnsDef):
+def _expand_ellipsis(schema: dict, columns: SelectColumns):
     for c in columns:
         if c is ...:
             # select all, i.e. *
@@ -704,7 +711,7 @@ class Join(ExprNode, ITable, Root):
     source_tables: Sequence[ITable]
     op: str = None
     on_exprs: Sequence[Expr] = None
-    columns: ColumnsDef = None
+    columns: SelectColumns = None
 
     @property
     def source_table(self):
@@ -904,9 +911,18 @@ class SelectCompiler(AbstractCompiler):
 
 
 @dataclass
+class Desc(ExprNode):
+    expr: ExprNode
+
+    def compile(self, c: Compiler) -> str:
+        e = c.compile(expr)
+        return f"{e} DESC"
+
+
+@dataclass
 class Select(ExprTable, Root):
     table: Expr = None
-    columns: ColumnsDef = None
+    columns: SelectColumns = None
     where_exprs: Sequence[Expr] = None
     order_by_exprs: Sequence[Expr] = None
     group_by_exprs: Sequence[Expr] = None
@@ -914,6 +930,7 @@ class Select(ExprTable, Root):
     limit_expr: int = None
     distinct: bool = False
     optimizer_hints: Sequence[Expr] = None
+    postfix: str = None
 
     @property
     @cache
@@ -958,6 +975,9 @@ class Select(ExprTable, Root):
 
         if self.limit_expr is not None:
             select += " " + c.dialect.offset_limit(0, self.limit_expr)
+        
+        if self.postfix:
+            select += self.postfix
 
         if parent_c.in_select:
             select = f"({select})"
@@ -1208,12 +1228,20 @@ class CreateTable(Statement):
         if self.source_table:
             return f"CREATE TABLE {ne}{c.compile(self.path)} AS {c.compile(self.source_table)}"
 
+        primary_keys = [k for k, v in self.path.schema.items() if isinstance(v, _Field) and v.options.primary_key]
+
+        if self.primary_keys is not None:
+            if primary_keys:
+                assert self.primary_keys == primary_keys
+            else:
+                primary_keys = self.primary_keys
+
+        if primary_keys and c.dialect.SUPPORTS_PRIMARY_KEY:
+            pks = ", PRIMARY KEY (%s)" % ", ".join(primary_keys)
+        else:
+            pks = ""
+
         schema = ", ".join(f"{c.dialect.quote(k)} {c.dialect.type_repr(v)}" for k, v in self.path.schema.items())
-        pks = (
-            ", PRIMARY KEY (%s)" % ", ".join(self.primary_keys)
-            if self.primary_keys and c.dialect.SUPPORTS_PRIMARY_KEY
-            else ""
-        )
         return f"CREATE TABLE {ne}{c.compile(self.path)}({schema}{pks})"
 
 
@@ -1235,23 +1263,57 @@ class TruncateTable(Statement):
         return f"TRUNCATE TABLE {c.compile(self.path)}"
 
 
+class ReturningStatement(Statement):
+    returning_exprs: SelectColumns = None
+
+    @property
+    def type(self):
+        return None if self.returning_exprs is None else ITable
+
+    def returning(self, *exprs):
+        """Add a 'RETURNING' clause to the insert expression.
+
+        Note: Not all databases support this feature!
+        """
+        if self.returning_exprs:
+            raise ValueError("A returning clause is already specified")
+
+        exprs = args_as_tuple(exprs)
+        exprs = _drop_skips(exprs)
+        if not exprs:
+            return self
+
+        resolve_names(self.path, exprs)
+        return self.replace(returning_exprs=exprs)
+
+    def _compile_returning(self, c: Compiler):
+        if not self.returning_exprs:
+            return ""
+
+        columns = ", ".join(map(c.compile, self.returning_exprs))
+        return " RETURNING " + columns
+
 @dataclass
-class DeleteFromTable(Statement):
+class DeleteFromTable(ReturningStatement):
     path: TablePath
     where_exprs: Sequence[Expr] = None
+    returning_exprs: SelectColumns = None
 
     def compile(self, c: Compiler) -> str:
         delete = f"DELETE FROM {c.compile(self.path)}"
         if self.where_exprs:
             delete += " WHERE " + " AND ".join(map(c.compile, self.where_exprs))
+
+        delete += self._compile_returning(c)
         return delete
 
 
 @dataclass
-class UpdateTable(Statement):
+class UpdateTable(ReturningStatement):
     path: TablePath
     updates: Dict[str, Expr]
     where_exprs: Sequence[Expr] = None
+    returning_exprs: SelectColumns = None
 
     def compile(self, c: Compiler) -> str:
         updates = [f"{k} = {c.compile(v)}" for k, v in self.updates.items()]
@@ -1259,15 +1321,22 @@ class UpdateTable(Statement):
 
         if self.where_exprs:
             update += " WHERE " + " AND ".join(map(c.compile, self.where_exprs))
+        update += self._compile_returning(c)
         return update
 
 
 @dataclass
-class InsertToTable(Statement):
+class InsertToTable(ReturningStatement):
     path: TablePath
     expr: Expr
     columns: List[str] = None
-    returning_exprs: List[str] = None
+    returning_exprs: SelectColumns = None
+
+    @property
+    def type(self):
+        if self.returning_exprs:
+            return ITable
+        return None
 
     def compile(self, c: Compiler) -> str:
         if isinstance(self.expr, ConstantTable):
@@ -1277,7 +1346,10 @@ class InsertToTable(Statement):
 
         columns = "(%s)" % ", ".join(map(c.quote, self.columns)) if self.columns is not None else ""
 
-        return f"INSERT INTO {c.compile(self.path)}{columns} {expr}"
+        q = f"INSERT INTO {c.compile(self.path)}{columns} {expr}"
+
+        q += self._compile_returning(c)
+        return q
 
     def returning(self, *exprs):
         """Add a 'RETURNING' clause to the insert expression.
