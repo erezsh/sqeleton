@@ -19,7 +19,8 @@ class TestSQL(unittest.TestCase):
 
     def test_compile_table_name(self):
         self.assertEqual(
-            "`marine_mammals`.`walrus`", self.compiler.replace(root=False).compile(table("marine_mammals", "walrus"))
+            "`marine_mammals`.`walrus`",
+            self.compiler.replace(_is_root=False).compile(table("marine_mammals", "walrus")),
         )
 
     def test_compile_select(self):

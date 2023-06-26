@@ -1,5 +1,8 @@
 from functools import partial
 import re
+from typing import Optional
+
+from sqeleton.queries.ast_classes import ForeignKey
 
 from ..utils import match_regexps
 
@@ -19,20 +22,24 @@ from ..abcs.database_types import (
     Boolean,
 )
 from ..abcs.mixins import AbstractMixin_MD5, AbstractMixin_NormalizeValue
-from .base import BaseDialect, Database, import_helper, ThreadLocalInterpreter, Mixin_Schema, Mixin_RandomSample
+from .base import BaseDialect, Database, QueryResult, import_helper, ThreadLocalInterpreter, Mixin_Schema, Mixin_RandomSample, SqlCode, logger
 from .base import (
     MD5_HEXDIGITS,
     CHECKSUM_HEXDIGITS,
     TIMESTAMP_PRECISION_POS,
 )
+from ..queries.compiler import CompiledCode
 
 
-def query_cursor(c, sql_code):
-    c.execute(sql_code)
-    if sql_code.lower().startswith("select"):
+def query_cursor(c, sql_code: CompiledCode) -> Optional[QueryResult]:
+    logger.debug(f"[Presto] Executing SQL: {sql_code.code} || {sql_code.args}")
+    c.execute(sql_code.code, sql_code.args)
+    if sql_code.code.lower().startswith("select"):
+        # columns = [col[0] for col in c.description]
+        # return QueryResult(c.fetchall(), columns)
         return c.fetchall()
     # Required for the query to actually run 🤯
-    if re.match(r"(insert|create|truncate|drop|explain)", sql_code, re.IGNORECASE):
+    if re.match(r"(insert|create|truncate|drop|explain)", sql_code.code, re.IGNORECASE):
         return c.fetchone()
 
 
@@ -72,6 +79,7 @@ class Mixin_NormalizeValue(AbstractMixin_NormalizeValue):
 class Dialect(BaseDialect, Mixin_Schema):
     name = "Presto"
     ROUNDS_ON_PREC_LOSS = True
+    ARG_SYMBOL = None   # Not implemented by Presto
     TYPE_CLASSES = {
         # Timestamps
         "timestamp with time zone": TimestampTZ,
@@ -138,6 +146,8 @@ class Dialect(BaseDialect, Mixin_Schema):
     def type_repr(self, t) -> str:
         if isinstance(t, TimestampTZ):
             return f"timestamp with time zone"
+        elif isinstance(t, ForeignKey):
+            return self.type_repr(t.type)
         try:
             return {float: "REAL"}[t]
         except KeyError:
@@ -169,12 +179,14 @@ class Presto(Database):
         else:
             self._conn = prestodb.dbapi.connect(**kw)
 
-    def _query(self, sql_code: str) -> list:
+    def _query(self, sql_code: SqlCode) -> Optional[QueryResult]:
         "Uses the standard SQL cursor interface"
         c = self._conn.cursor()
 
         if isinstance(sql_code, ThreadLocalInterpreter):
             return sql_code.apply_queries(partial(query_cursor, c))
+        elif isinstance(sql_code, str):
+            sql_code = CompiledCode(sql_code, [], None) # Unknown type. #TODO: Should we guess?
 
         return query_cursor(c, sql_code)
 

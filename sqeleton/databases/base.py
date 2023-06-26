@@ -14,6 +14,7 @@ from typing import (
     Union,
     TypeVar,
     Type,
+    overload
 )
 from functools import partial, wraps
 from concurrent.futures import ThreadPoolExecutor
@@ -22,9 +23,11 @@ from abc import abstractmethod
 
 from runtype import dataclass
 
+from sqeleton.queries.compiler import CompiledCode
+
 from ..utils import is_uuid, safezip, Self
-from ..queries import Expr, Compiler, table, Select, SKIP, Explain, Code, this
-from ..queries.ast_classes import Random, CompilableNode
+from ..queries import ExprNode, Compiler, table, Select, SKIP, T_SKIP, Explain, Code, this, commit
+from ..queries.ast_classes import ForeignKey, Random, CompilableNode, TablePath
 from ..abcs.database_types import (
     AbstractDatabase,
     AbstractDialect,
@@ -45,6 +48,7 @@ from ..abcs.database_types import (
     DbPath,
     Boolean,
 )
+from ..schema import Options
 from ..abcs.mixins import Compilable
 from ..abcs.mixins import (
     AbstractMixin_Schema,
@@ -91,6 +95,21 @@ def _one(seq):
     return x
 
 
+@dataclass
+class QueryResult:
+    rows: list
+    columns: list = None
+
+    def __iter__(self):
+        return iter(self.rows)
+
+    def __len__(self):
+        return len(self.rows)
+
+    def __getitem__(self, i):
+        return self.rows[i]
+
+
 class ThreadLocalInterpreter:
     """An interpeter used to execute a sequence of queries within the same thread and cursor.
 
@@ -101,11 +120,10 @@ class ThreadLocalInterpreter:
         self.gen = gen
         self.compiler = compiler
 
-    def apply_queries(self, callback: Callable[[str], Any]):
-        q: Expr = next(self.gen)
+    def apply_queries(self, callback: Callable[[CompiledCode], Any]) -> None:
+        q: ExprNode = next(self.gen)
         while True:
-            sql = self.compiler.compile(q)
-            logger.debug("Running SQL (%s-TL): %s", self.compiler.database.name, sql)
+            sql = self.compiler.compile_with_args(q)
             try:
                 try:
                     res = callback(sql) if sql is not SKIP else SKIP
@@ -116,16 +134,22 @@ class ThreadLocalInterpreter:
             except StopIteration:
                 break
 
+SqlCode = Union[str, CompiledCode, ThreadLocalInterpreter]
 
-def apply_query(callback: Callable[[str], Any], sql_code: Union[str, ThreadLocalInterpreter]) -> list:
+
+def apply_query(
+    callback: Callable[[CompiledCode], Any], sql_code: SqlCode
+) -> Optional[QueryResult]:
     if isinstance(sql_code, ThreadLocalInterpreter):
         return sql_code.apply_queries(callback)
-    else:
-        return callback(sql_code)
+    elif isinstance(sql_code, str):
+        sql_code = CompiledCode(sql_code, [], None) # Unknown type. #TODO: Should we guess?
+
+    return callback(sql_code)
 
 
 class Mixin_Schema(AbstractMixin_Schema):
-    def table_information(self) -> Compilable:
+    def table_information(self) -> TablePath:
         return table("information_schema", "tables")
 
     def list_tables(self, table_schema: str, like: Compilable = None) -> Compilable:
@@ -159,7 +183,7 @@ class BaseDialect(AbstractDialect):
     SUPPORTS_INDEXES = False
     TYPE_CLASSES: Dict[str, type] = {}
     MIXINS = frozenset()
-
+    ARG_SYMBOL = "%s"
     PLACEHOLDER_TABLE = None  # Used for Oracle
 
     def offset_limit(self, offset: Optional[int] = None, limit: Optional[int] = None):
@@ -197,13 +221,20 @@ class BaseDialect(AbstractDialect):
             return t
         elif isinstance(t, TimestampTZ):
             return f"TIMESTAMP({min(t.precision, DEFAULT_DATETIME_PRECISION)})"
+        elif isinstance(t, ForeignKey):
+            return self.type_repr(t.type)
         return {
             int: "INT",
             str: "VARCHAR",
+            bytes: "BYTEA",
             bool: "BOOLEAN",
             float: "FLOAT",
             datetime: "TIMESTAMP",
         }[t]
+
+    # def decl_repr(self, name, type_):
+    #     if isinstance(type_, ForeignKey):
+    #         return f"FOREIGN KEY ({name}) REFERENCES Persons(PersonID)"
 
     def _parse_type_repr(self, type_repr: str) -> Optional[Type[ColType]]:
         return self.TYPE_CLASSES.get(type_repr)
@@ -273,20 +304,8 @@ T = TypeVar("T", bound=BaseDialect)
 TRes = TypeVar("TRes")
 
 
-@dataclass
-class QueryResult:
-    rows: list
-    columns: list = None
-
-    def __iter__(self):
-        return iter(self.rows)
-
-    def __len__(self):
-        return len(self.rows)
-
-    def __getitem__(self, i):
-        return self.rows[i]
-
+QueryInputItem = Union[CompilableNode, T_SKIP]
+QueryInput = Union[str, QueryInputItem, Generator, List[QueryInputItem]]
 
 class Database(AbstractDatabase[T]):
     """Base abstract class for databases.
@@ -313,39 +332,54 @@ class Database(AbstractDatabase[T]):
         compiler = Compiler(self)
         return compiler.compile(sql_ast)
 
-    def query(
-        self, sql_ast: Union[Expr, CompilableNode, Generator, Sequence[CompilableNode]], res_type: Type[TRes] = None
-    ) -> TRes:
+    # def set_logger_level(self, level: Union[str, int]):
+    #     if isinstance(level, str):
+    #         level = getattr(logging, level)
+
+    #     logger.setLevel(level)
+
+    @overload
+    def query(self, query_input: QueryInput) -> Any:
+        ...
+
+    @overload
+    def query(self, query_input: QueryInput, res_type: None) -> Any:
+        ...
+
+    @overload
+    def query(self, query_input: QueryInput, res_type: Type[TRes]) -> TRes:
+        ...
+
+    def query(self, query_input, res_type = None):
         """Query the given SQL code/AST, and attempt to convert the result to type 'res_type'
 
-        If given a generator, it will execute all the yielded sql queries with the same thread and cursor.
-        The results of the queries a returned by the `yield` stmt (using the .send() mechanism).
-        It's a cleaner approach than exposing cursors, but may not be enough in all cases.
+        If given a generator:
+            It will execute all the yielded sql queries with the same thread and cursor.
+            The results of the queries are returned by the `yield` stmt (using the .send() mechanism).
+            It's a cleaner approach than exposing cursors, but may not be enough in all cases.
         """
-        if sql_ast is SKIP:
+        if query_input is SKIP:
             return
 
         compiler = Compiler(self)
-        if isinstance(sql_ast, Generator):
-            sql_code = ThreadLocalInterpreter(compiler, sql_ast)
-        elif isinstance(sql_ast, list):
-            for i in sql_ast[:-1]:
+        if isinstance(query_input, Generator):
+            sql_code = ThreadLocalInterpreter(compiler, query_input)
+        elif isinstance(query_input, list):
+            for i in query_input[:-1]:
                 self.query(i)
-            return self.query(sql_ast[-1], res_type)
+            return self.query(query_input[-1], res_type)
         else:
-            if isinstance(sql_ast, str):
-                sql_code = sql_ast
+            if isinstance(query_input, str):
+                sql_code = query_input
             else:
                 if res_type is None:
-                    res_type = sql_ast.type
-                sql_code = compiler.compile(sql_ast)
+                    res_type = query_input.type
+                sql_code = compiler.compile_with_args(query_input)
                 if sql_code is SKIP:
                     return SKIP
 
-            logger.debug("Running SQL (%s): %s", self.name, sql_code)
-
-        if self._interactive and isinstance(sql_ast, Select):
-            explained_sql = compiler.compile(Explain(sql_ast))
+        if self._interactive and isinstance(query_input, Select):
+            explained_sql = compiler.compile_with_args(Explain(query_input))
             explain = self._query(explained_sql)
             for row in explain:
                 # Most returned a 1-tuple. Presto returns a string
@@ -357,7 +391,12 @@ class Database(AbstractDatabase[T]):
                 sys.exit(1)
 
         res = self._query(sql_code)
-        if res_type is list:
+        if res_type == None:
+            pass    # Do no casting
+        elif res is None:
+            assert res_type is not None
+            raise ValueError(f"Query returned NULL, but query() is expecting type {res_type}")
+        elif res_type is list:
             return list(res)
         elif res_type in (int, str):
             if not res:
@@ -378,7 +417,7 @@ class Database(AbstractDatabase[T]):
             assert len(res) == 1, (sql_code, res)
             return res[0]
         elif getattr(res_type, "__origin__", None) is list and len(res_type.__args__) == 1:
-            if res_type.__args__ in ((int,), (str,), (float,)):
+            if res_type.__args__ in ((int,), (str,), (bytes,), (float,)):
                 return [_one(row) for row in res]
             elif res_type.__args__ in [(Tuple,), (tuple,)]:
                 return [tuple(row) for row in res]
@@ -388,6 +427,12 @@ class Database(AbstractDatabase[T]):
                 (elem_type,) = res_type.__args__
                 return [elem_type(**dict(safezip(res.columns, row))) for row in res]
                 # raise ValueError(res_type)
+        else:
+            if len(res) == 0:
+                return None     # TODO: Only allow if res_type is Optional
+            assert len(res) == 1, len(res)
+            d = dict(safezip(res.columns, res[0]))
+            return res_type(**d)
         return res
 
     def enable_interactive(self):
@@ -505,19 +550,21 @@ class Database(AbstractDatabase[T]):
     def parse_table_name(self, name: str) -> DbPath:
         return parse_table_name(name)
 
-    def _query_cursor(self, c, sql_code: str) -> Optional[QueryResult]:
-        assert isinstance(sql_code, str), sql_code
+    def _query_cursor(self, c, sql_code: CompiledCode) -> Optional[QueryResult]:
+        assert isinstance(sql_code, CompiledCode), sql_code
         try:
-            c.execute(sql_code)
-            if sql_code.lstrip().lower().startswith(("select", "explain", "show")):
-                columns = [col[0] for col in c.description]
+            logger.debug(f"{self.name} Executing SQL: {sql_code.code} || {sql_code.args}")
+            c.execute(sql_code.code, sql_code.args)
+            # insert, delete and update may return values if they have the "returning" clause.
+            if sql_code.type is not None or sql_code.code.lstrip().lower().startswith(("select", "explain", "show", "with")):
+                columns = c.description and [col[0] for col in c.description]
                 return QueryResult(c.fetchall(), columns)
         except Exception as _e:
             # logger.exception(e)
             # logger.error(f'Caused by SQL: {sql_code}')
             raise
 
-    def _query_conn(self, conn, sql_code: Union[str, ThreadLocalInterpreter]) -> QueryResult:
+    def _query_conn(self, conn, sql_code: SqlCode) -> Optional[QueryResult]:
         c = conn.cursor()
         callback = partial(self._query_cursor, c)
         return apply_query(callback, sql_code)
@@ -527,6 +574,7 @@ class Database(AbstractDatabase[T]):
         return super().close()
 
     def list_tables(self, tables_like, schema=None):
+        self.dialect: Mixin_Schema
         return self.query(self.dialect.list_tables(schema or self.default_schema, tables_like))
 
     def table(self, *path, **kw):
@@ -539,6 +587,9 @@ class Database(AbstractDatabase[T]):
 
         _DatabaseWithMixins.__name__ = cls.__name__
         return _DatabaseWithMixins
+
+    def commit(self):
+        return self.query(commit)
 
 
 class ThreadedDatabase(Database):
@@ -560,11 +611,11 @@ class ThreadedDatabase(Database):
         except Exception as e:
             self._init_error = e
 
-    def _query(self, sql_code: Union[str, ThreadLocalInterpreter]) -> QueryResult:
+    def _query(self, sql_code: SqlCode) -> QueryResult:
         r = self._queue.submit(self._query_in_worker, sql_code)
         return r.result()
 
-    def _query_in_worker(self, sql_code: Union[str, ThreadLocalInterpreter]):
+    def _query_in_worker(self, sql_code: SqlCode):
         "This method runs in a worker thread"
         if self._init_error:
             raise self._init_error

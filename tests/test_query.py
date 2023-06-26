@@ -4,7 +4,7 @@ import unittest
 from sqeleton.abcs import AbstractDatabase, AbstractDialect
 from sqeleton.utils import CaseInsensitiveDict, CaseSensitiveDict
 
-from sqeleton.queries import this, table, Compiler, outerjoin, cte, when, coalesce, CompileError
+from sqeleton.queries import this, table, Compiler, outerjoin, cte, when, coalesce, CompileError, join
 from sqeleton.queries.ast_classes import Random
 from sqeleton import code, this, table
 
@@ -206,7 +206,7 @@ class TestQuery(unittest.TestCase):
 
         q = c.compile(t.select(this.a).group_by(this.b).agg(this.c).select(optimizer_hints="PARALLEL(a 16)"))
         self.assertEqual(
-            q, "SELECT /*+ PARALLEL(a 16) */ * FROM (SELECT b, c FROM (SELECT a FROM a) tmp2 GROUP BY 1) tmp3"
+            q, "SELECT /*+ PARALLEL(a 16) */ * FROM (SELECT b, c FROM (SELECT a FROM a) tmp3 GROUP BY 1) tmp2"
         )
 
     def test_table_ops(self):
@@ -271,9 +271,13 @@ class TestQuery(unittest.TestCase):
         q = c.compile(t.group_by(this.b).agg(this.c, this.d).having(this.b.sum() > 1))
         self.assertEqual(q, "SELECT b, c, d FROM a GROUP BY 1 HAVING (SUM(b) > 1)")
 
+    def test_group_by2(self):
+        c = Compiler(MockDatabase())
+        t = table("a")
+
         # Select interaction
         q = c.compile(t.select(this.a).group_by(this.b).agg(this.c).select(this.c + 1))
-        self.assertEqual(q, "SELECT (c + 1) FROM (SELECT b, c FROM (SELECT a FROM a) tmp3 GROUP BY 1) tmp4")
+        self.assertEqual(q, "SELECT (c + 1) FROM (SELECT b, c FROM (SELECT a FROM a) tmp2 GROUP BY 1) tmp1")
 
     def test_case_when(self):
         c = Compiler(MockDatabase())
@@ -313,3 +317,51 @@ class TestQuery(unittest.TestCase):
 
         q = c.compile(tablesample(nonzero, 10))
         self.assertEqual(q, "SELECT * FROM points WHERE (x > 0) AND (y > 0) TABLESAMPLE BERNOULLI (10)")
+
+    def test_ellipsis(self):
+        c = Compiler(MockDatabase())
+        schema = {"i": int, "s": str}
+        t = table("a", schema=schema)
+        q = t.select(..., neg_i=-this.i)
+        assert q.schema == {**schema, "neg_i": int}
+        assert c.compile(q) == "SELECT *, (-i) AS neg_i FROM a"
+
+    def test_table_alias(self):
+        c = Compiler(MockDatabase())
+
+        schema = {"i": int, "s": str}
+        t = table("a", schema=schema)
+
+        # q1, q2
+        q1 = t.select(this.i, this.s).alias("q1")
+        q2 = q1.select(this.s)
+        s = c.compile(q2)
+        assert s == "SELECT s FROM (SELECT i, s FROM a) q1"
+
+        # q3
+        q3 = join(t.alias("t"), q1).on(t["i"] == q1["i"]).select()
+        s = c.compile(q3)
+        self.assertEqual(s, "SELECT * FROM a t JOIN (SELECT i, s FROM a) q1 ON (t.i = q1.i)")
+
+        # q4
+        q1_ = q1.alias("q1_")
+        q4 = join(q1, q1_).on(q1["i"] == q1_["i"]).select()
+        s = c.compile(q4)
+        assert s == "SELECT * FROM (SELECT i, s FROM a) q1 JOIN (SELECT i, s FROM a) q1_ ON (q1.i = q1_.i)"
+
+        # group_by - q5, q6, q7
+        q5 = t.group_by(this.s).agg(isum=this.i.sum())
+        s = c.compile(q5)
+        assert s == "SELECT s, SUM(i) AS isum FROM a GROUP BY 1"
+        q6 = q1.group_by(this.s).agg(isum=this.i.sum())
+        s = c.compile(q6)
+        assert s == "SELECT s, SUM(i) AS isum FROM (SELECT i, s FROM a) q1 GROUP BY 1"
+        q7 = t.select(this.i, this.s).group_by(this.s).agg(isum=this.i.sum())
+        s = c.compile(q7)
+        assert s == "SELECT s, SUM(i) AS isum FROM (SELECT i, s FROM a) tmp1 GROUP BY 1"
+        q7 = q3.group_by(this.s).agg(isum=this.i.sum())
+        s = c.compile(q7)
+        self.assertEqual(
+            s,
+            "SELECT s, SUM(i) AS isum FROM (SELECT * FROM a t JOIN (SELECT i, s FROM a) q1 ON (t.i = q1.i)) tmp2 GROUP BY 1",
+        )

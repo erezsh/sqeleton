@@ -160,7 +160,7 @@ def _parameterized_class_per_conn(test_databases):
     return parameterized_class(("name", "db_cls"), names)
 
 
-def test_each_database_in_list(databases) -> Callable:
+def make_test_each_database_in_list(databases) -> Callable:
     def _test_per_database(cls):
         return _parameterized_class_per_conn(databases)(cls)
 
