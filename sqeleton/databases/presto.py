@@ -186,7 +186,7 @@ class Presto(Database):
         if isinstance(sql_code, ThreadLocalInterpreter):
             return sql_code.apply_queries(partial(query_cursor, c))
         elif isinstance(sql_code, str):
-            sql_code = CompiledCode(sql_code, [])
+            sql_code = CompiledCode(sql_code, [], None) # Unknown type. #TODO: Should we guess?
 
         return query_cursor(c, sql_code)
 

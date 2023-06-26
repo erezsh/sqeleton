@@ -7,6 +7,7 @@ import re
 import contextvars
 from dataclasses import is_dataclass 
 import json
+from enum import Enum
 
 from runtype import dataclass
 
@@ -29,6 +30,7 @@ class Root:
 class CompiledCode:
     code: str
     args: List[Any]
+    type: Optional[type]
 
 
 def eval_template(query_template: str, data_dict: Dict[str, Any], arg_symbol) -> Tuple[str, list]:
@@ -92,7 +94,7 @@ class Compiler(AbstractCompiler):
         else:
             args = []
 
-        return CompiledCode(res, args)
+        return CompiledCode(res, args, elem.type)
 
     def _add_as_param(self, elem):
         if self._args_enabled:
@@ -133,6 +135,10 @@ class Compiler(AbstractCompiler):
             return "*"
         elif is_dataclass(elem):
             return self._add_as_param(json.dumps(elem.json()))
+        elif isinstance(elem, (list, dict)):
+            return self._add_as_param(json.dumps(elem))
+        elif isinstance(elem, Enum):
+            return self._add_as_param(elem.value)
         
         assert False, elem
 
