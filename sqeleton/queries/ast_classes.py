@@ -759,7 +759,7 @@ class Join(ExprNode, ITable, Root):
 
         if self.columns is not None:
             # join-select already applied
-            return super().select(*exprs, **named_exprs)
+            return ITable.select(self, *exprs, **named_exprs)
 
         exprs = _drop_skips(exprs)
         named_exprs = _drop_skips_dict(named_exprs)
@@ -1091,7 +1091,9 @@ class _ResolveColumn(ExprNode, LazyOps):
             # return Wildcard()
             pass
 
-        return super().__rsub__(other)
+        # return super().__rsub__(other)    XXX why does it fail?
+        return LazyOps.__rsub__(self, other)
+
 
 
 

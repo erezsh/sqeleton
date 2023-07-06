@@ -79,5 +79,3 @@ sqeleton = 'sqeleton.__main__:main'
 line-length = 120
 target-version = "py38"
 
-[tool.mypy]
-plugins = "runtype.mypy"

@@ -25,9 +25,9 @@ SchemaInput = Union[Type[TableType], Schema, dict]
 
 @dataclass
 class Options:
+    default: Any = None
     primary_key: bool = False
     auto: bool = False
-    default: Any = None
     # TODO: foreign_key, unique
     # TODO: index?
 
