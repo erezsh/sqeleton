@@ -30,7 +30,6 @@ from . import __version__
 STYLE = style_from_pygments_cls(get_style_by_name("dracula"))
 
 
-
 sql_keywords = [
     "abort",
     "action",
@@ -246,7 +245,7 @@ def run_command(db, q):
         try:
             names = db.query(db.dialect.list_tables(db.default_schema, like=f"%{pattern}%" if pattern else None))
         except Exception as e:
-            logging.error(e)
+            logging.exception(e)
         else:
             print_table(names, ["name"], "List of tables")
             add_keywords([".".join(n) for n in names])

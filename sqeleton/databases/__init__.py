@@ -1,4 +1,4 @@
-from .base import MD5_HEXDIGITS, CHECKSUM_HEXDIGITS, QueryError, ConnectError, BaseDialect, Database
+from .base import MD5_HEXDIGITS, CHECKSUM_HEXDIGITS, QueryError, ConnectError, BaseDialect, Database, logger
 from ..abcs import DbPath, DbKey, DbTime
 from ._connect import Connect
 

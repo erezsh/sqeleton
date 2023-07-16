@@ -1,15 +1,16 @@
 from dataclasses import field
 from datetime import datetime
-from typing import Any, Generator, List, Optional, Sequence, Union, Dict
+from typing import Any, Generator, List, Optional, Sequence, Union, Dict, Literal, overload
 from collections import ChainMap
+from functools import lru_cache
 
-from runtype import dataclass as _dataclass, cv_type_checking
+from runtype import dataclass as _dataclass, cv_type_checking, isa
 
 from ..utils import join_iter, ArithString
-from ..abcs import Compilable
-from ..abcs.database_types import AbstractTable
+from ..abcs import AbstractCompiler, Compilable
+from ..abcs.database_types import AbstractTable, AbstractDialect
 from ..abcs.mixins import AbstractMixin_Regex, AbstractMixin_TimeTravel
-from ..schema import Schema
+from ..schema import Schema, TableType, Options, _Field
 
 from .compiler import Compiler, cv_params, Root, CompileError
 from .base import SKIP, DbPath, args_as_tuple, SqeletonError
@@ -24,6 +25,14 @@ class QB_TypeError(QueryBuilderError):
 
 
 dataclass = _dataclass(eq=False, order=False)
+
+ellipsis = type(Ellipsis)
+
+
+def cache(user_function, /):
+    'Simple lightweight unbounded cache.  Sometimes called "memoize".'
+    # Taken from https://github.com/python/cpython/blob/3.11/Lib/functools.py
+    return lru_cache(maxsize=None)(user_function)
 
 
 class CompilableNode(Compilable):
@@ -40,7 +49,7 @@ class CompilableNode(Compilable):
             if not isinstance(vs, (list, tuple)):
                 vs = [vs]
             for v in vs:
-                if isinstance(v, ExprNode):
+                if isinstance(v, CompilableNode):
                     yield from v._dfs_values()
 
 
@@ -52,7 +61,7 @@ class ExprNode(CompilableNode):
 
 
 # Query expressions can only interact with objects that are an instance of 'Expr'
-Expr = Union[ExprNode, str, bool, int, float, datetime, ArithString, None]
+Expr = Union[ExprNode, str, bytes, bool, int, float, datetime, ArithString, None, dict, list]
 
 
 @dataclass
@@ -99,7 +108,7 @@ class ITable(AbstractTable):
     source_table: Any
     schema: Schema = None
 
-    def select(self, *exprs, distinct=SKIP, optimizer_hints=SKIP, **named_exprs) -> "Select":
+    def select(self, *exprs: Expr, distinct: bool=SKIP, optimizer_hints=SKIP, **named_exprs) -> "Select":
         """Create a new table with the specified fields"""
         exprs = args_as_tuple(exprs)
         exprs = _drop_skips(exprs)
@@ -154,8 +163,13 @@ class ITable(AbstractTable):
     #     return self._get_column(column)
 
     def __getitem__(self, column):
+        if isinstance(column, (list, tuple)):
+            return [self[c] for c in column]
+        elif column is ...:
+            assert self.schema
+            return [self[k] for k in self.schema]
         if not isinstance(column, str):
-            raise TypeError()
+            raise TypeError(column)
         return self._get_column(column)
 
     def count(self):
@@ -177,6 +191,11 @@ class ITable(AbstractTable):
     def intersect(self, other: "ITable"):
         """SELECT * FROM self INTERSECT other"""
         return TableOp("INTERSECT", self, other)
+
+    def alias(self, name):
+        if isinstance(self, TableAlias):
+            return self.replace(name=name)
+        return TableAlias(self, name)
 
 
 @dataclass
@@ -218,8 +237,23 @@ class LazyOps:
     def __sub__(self, other):
         return BinOp("-", [self, other])
 
+    def __rsub__(self, other):
+        return BinOp("-", [other, self])
+
+    def __mul__(self, other):
+        return BinOp("*", [self, other])
+
+    __radd__ = __add__
+    __rmul__ = __mul__
+
+    def __truediv__(self, other):
+        return BinOp("/", [self, other])
+
     def __neg__(self):
         return UnaryOp("-", self)
+
+    def not_(self):
+        return UnaryOp("NOT ", self)
 
     def __gt__(self, other):
         return BinBoolOp(">", [self, other])
@@ -235,6 +269,15 @@ class LazyOps:
             return BinBoolOp("IS", [self, None])
 
         return BinBoolOp("=", [self, other])
+
+    def __ne__(self, other):
+        if cv_type_checking.get():
+            return super().__ne__(other)
+
+        if other is None:
+            return BinBoolOp("IS NOT", [self, None])
+
+        return BinBoolOp("<>", [self, other])
 
     def __lt__(self, other):
         return BinBoolOp("<", [self, other])
@@ -254,6 +297,9 @@ class LazyOps:
     def like(self, other):
         return BinBoolOp("LIKE", [self, other])
 
+    def ilike(self, other):
+        return BinBoolOp("ILIKE", [self, other])
+
     def in_(self, *others):
         others = args_as_tuple(others)
         assert isinstance(others, tuple), f"Only lists of constants are supported for now, not {others}"
@@ -269,8 +315,9 @@ class LazyOps:
     def sum(self):
         return Func("SUM", [self])
 
-    def count(self):
-        return Func("COUNT", [self])
+    def count(self, distinct=False):
+        # return Func("COUNT", [self])
+        return Count(self, distinct=distinct)
 
     def max(self):
         return Func("MAX", [self])
@@ -295,6 +342,7 @@ class TestRegex(ExprNode, LazyOps):
 class Func(ExprNode, LazyOps):
     name: str
     args: Sequence[Expr]
+    ret_type: type = None
 
     def compile(self, c: Compiler) -> str:
         args = ", ".join(c.compile(e) for e in self.args)
@@ -311,7 +359,7 @@ class WhenThen(ExprNode):
 
 
 @dataclass
-class CaseWhen(ExprNode):
+class CaseWhen(ExprNode, LazyOps):
     cases: Sequence[WhenThen]
     else_expr: Expr = None
 
@@ -392,7 +440,8 @@ class BinOp(ExprNode, LazyOps):
     def type(self):
         types = {_expr_type(i) for i in self.args}
         if len(types) > 1:
-            raise TypeError(f"Expected all args to have the same type, got {types}")
+            # raise TypeError(f"Expected all args to have the same type, got {types}")
+            return Union[tuple(types)]
         (t,) = types
         return t
 
@@ -405,6 +454,10 @@ class UnaryOp(ExprNode, LazyOps):
     def compile(self, c: Compiler) -> str:
         return f"({self.op}{c.compile(self.expr)})"
 
+    @property
+    def type(self):
+        return self.expr.type
+
 
 class BinBoolOp(BinOp):
     type = bool
@@ -412,7 +465,7 @@ class BinBoolOp(BinOp):
 
 @_dataclass(eq=False, order=False)
 class Column(ExprNode, LazyOps):
-    source_table: ITable
+    source_table: ITable    # TODO: TablePath
     name: str
 
     @property
@@ -424,13 +477,26 @@ class Column(ExprNode, LazyOps):
     def compile(self, c: Compiler) -> str:
         if c._table_context:
             if len(c._table_context) > 1:
+                possible_owners = [t for t in c._table_context if t.schema is None or self.name in t.schema]
+                if len(possible_owners) > 1:
+                    owners = [t for t in possible_owners if t is self.source_table]
+                    if owners:
+                        owner ,= owners
+                        if isinstance(owner, TablePath):
+                            return f"{c.compile(owner)}.{c.quote(self.name)}"
+                        elif isinstance(owner, TableAlias):
+                            return f"{c.quote(owner.name)}.{c.quote(self.name)}"
+
                 aliases = [
-                    t for t in c._table_context if isinstance(t, TableAlias) and t.source_table is self.source_table
+                    t
+                    for t in c._table_context
+                    if isinstance(t, TableAlias) and (t.source_table is self.source_table or t is self.source_table)
                 ]
                 if not aliases:
                     return c.quote(self.name)
                 elif len(aliases) > 1:
-                    raise CompileError(f"Too many aliases for column {self.name}")
+                    names = [a.name for a in aliases]
+                    raise CompileError(f"Too many aliases for column {self.name} between tables: {names}")
                 (alias,) = aliases
 
                 return f"{c.quote(alias.name)}.{c.quote(self.name)}"
@@ -451,9 +517,17 @@ class TablePath(ExprTable):
     def source_table(self):
         return self
 
+    @property
+    def name(self):
+        return self.path[-1]
+
+    def to_string(self, dialect: AbstractDialect):
+        return ".".join(map(dialect.quote, self.path))
+
     def compile(self, c: Compiler) -> str:
-        path = self.path  # c.database._normalize_table_path(self.name)
-        return ".".join(map(c.quote, path))
+        # path = self.path  # c.database._normalize_table_path(self.name)
+        # return ".".join(map(c.quote, path))
+        return self.to_string(c.dialect)
 
     def __repr__(self) -> str:
         if self.schema:
@@ -489,11 +563,11 @@ class TablePath(ExprTable):
         """Returns a query expression to truncate the table. (remove all rows)"""
         return TruncateTable(self)
 
-    def delete_rows(self, *where_exprs: Expr):
+    def delete_rows(self, *where_exprs: Union[Expr, Literal[SKIP]]):
         where_exprs = args_as_tuple(where_exprs)
         where_exprs = _drop_skips(where_exprs)
         if not where_exprs:
-            return self
+            return self.truncate()
 
         resolve_names(self.source_table, where_exprs)
         return DeleteFromTable(self, where_exprs)
@@ -518,12 +592,13 @@ class TablePath(ExprTable):
             return SKIP
 
         if isinstance(rows[0], dict):
+            # TODO: Validate all rows are the same?
             keys = list(rows[0].keys())
-            if columns is None:
+            if not columns:
                 columns = keys
             elif not (set(columns) <= set(rows[0].keys())):
                 raise ValueError("Keys in dictionary are not a subset of 'columns'")
-            rows = [[row[k] for k in columns] for row in rows]
+            rows = [[row.get(k) for k in columns] for row in rows]
 
         return InsertToTable(self, ConstantTable(rows), columns=columns)
 
@@ -536,7 +611,14 @@ class TablePath(ExprTable):
         if (not values) == (not kw):
             raise ValueError("Must provide either positional arguments or keyword arguments, but not a mix of both.")
         if values:
-            return InsertToTable(self, ConstantTable([values]), columns=columns)
+            if len(values) == 1 and isinstance(values[0], TableType):
+                assert columns is None
+                kw = {k:v.default if isinstance(v, Options) else v
+                      for k, v in values[0]
+                      if not (isinstance(v, Options) and v.auto)
+                      }
+            else:
+                return InsertToTable(self, ConstantTable([values]), columns=columns)
 
         assert kw
         assert not columns
@@ -573,13 +655,55 @@ class TablePath(ExprTable):
             assert offset is None and statement is None
 
 
+@_dataclass
+class ForeignKey:
+    table: TablePath
+    field: str
+
+    @property
+    def type(self):
+        return self.table.schema[self.field]
+
+
 @dataclass
-class TableAlias(ExprNode, ITable):
+class TableAlias(ExprTable):
     source_table: ITable
     name: str
 
     def compile(self, c: Compiler) -> str:
         return f"{c.compile(self.source_table)} {c.quote(self.name)}"
+
+    @property
+    def schema(self):
+        return self.source_table.schema
+
+@dataclass
+class Exists(ExprNode, LazyOps):
+    expr: ITable
+
+    type = bool
+
+    def compile(self, c: Compiler) -> str:
+        c = c.replace(in_select=False)
+        return f"EXISTS ({c.compile(self.expr)})"
+
+SelectColumns = Sequence[Union[Expr, ellipsis]]
+
+
+def _expand_ellipsis(schema: dict, columns: SelectColumns):
+    for c in columns:
+        if c is ...:
+            # select all, i.e. *
+            yield from schema.items()
+        else:
+            yield c.name, c.type
+
+
+def _union_dicts(*ds):
+    unioned = {}
+    for d in ds:
+        unioned.update(d)
+    return unioned
 
 
 @dataclass
@@ -587,21 +711,24 @@ class Join(ExprNode, ITable, Root):
     source_tables: Sequence[ITable]
     op: str = None
     on_exprs: Sequence[Expr] = None
-    columns: Sequence[Expr] = None
+    columns: SelectColumns = None
 
     @property
     def source_table(self):
         return self
 
     @property
+    @cache
     def schema(self):
-        if self.columns is None:
+        if not self.columns:
             schemas = [t.schema for t in self.source_tables if t.schema]
             assert schemas and all(schemas)
             return type(schemas[0])(ChainMap(*schemas))  # TODO merge dictionaries in compliance with SQL dialect!
 
-        s = self.source_tables[0].schema  # TODO validate types match between both tables
-        return type(s)({c.name: c.type for c in self.columns})
+        # TODO validate types match between both tables
+        schemas = [s.schema for s in self.source_tables]
+        d = _union_dicts(*schemas)
+        return type(schemas[0])(dict(_expand_ellipsis(d, self.columns)))
 
     def on(self, *exprs) -> "Join":
         """Add an ON clause, for filtering the result of the cartesian product (i.e. the JOIN)"""
@@ -614,16 +741,25 @@ class Join(ExprNode, ITable, Root):
         if not exprs:
             return self
 
+        exprs = [BinBoolOp('=', [t[e] for t in self.source_tables])
+                 if isinstance(e, str)
+                 else e
+                 for e in exprs]
+
         return self.replace(on_exprs=(self.on_exprs or []) + exprs)
 
-    def select(self, *exprs, **named_exprs) -> "Join":
+    def select(self, *exprs: Expr, **named_exprs) -> "Join":
         """Select fields to return from the JOIN operation
 
         See Also: ``ITable.select()``
         """
+        for e in exprs:
+            if not isa(e, Expr):
+                raise TypeError(e)
+
         if self.columns is not None:
             # join-select already applied
-            return super().select(*exprs, **named_exprs)
+            return ITable.select(self, *exprs, **named_exprs)
 
         exprs = _drop_skips(exprs)
         named_exprs = _drop_skips_dict(named_exprs)
@@ -636,9 +772,10 @@ class Join(ExprNode, ITable, Root):
         tables = [
             t if isinstance(t, TableAlias) else TableAlias(t, parent_c.new_unique_name()) for t in self.source_tables
         ]
-        c = parent_c.add_table_context(*tables, in_join=True, in_select=False)
+        c = parent_c.replace(in_select=True)
         op = " JOIN " if self.op is None else f" {self.op} JOIN "
         joined = op.join(c.compile(t) for t in tables)
+        c = parent_c.add_table_context(*tables, in_select=True)
 
         if self.on_exprs:
             on = " AND ".join(c.compile(e) for e in self.on_exprs)
@@ -646,12 +783,11 @@ class Join(ExprNode, ITable, Root):
         else:
             res = joined
 
-        columns = "*" if self.columns is None else ", ".join(map(c.compile, self.columns))
+        columns = "*" if not self.columns else ", ".join(map(c.compile, self.columns))
         select = f"SELECT {columns} FROM {res}"
 
+        # TODO work with TableAlias
         if parent_c.in_select:
-            select = f"({select}) {c.new_unique_name()}"
-        elif parent_c.in_join:
             select = f"({select})"
         return select
 
@@ -659,8 +795,8 @@ class Join(ExprNode, ITable, Root):
 @dataclass
 class GroupBy(ExprNode, ITable, Root):
     table: ITable
-    keys: Sequence[Expr] = None  # IKey?
-    values: Sequence[Expr] = None
+    keys_: Sequence[Expr] = None  # IKey?
+    values_: Sequence[Expr] = None
     having_exprs: Sequence[Expr] = None
 
     @property
@@ -668,12 +804,15 @@ class GroupBy(ExprNode, ITable, Root):
         return self
 
     @property
+    @cache
     def schema(self):
         s = self.table.schema
-        return type(s)({c.name: c.type for c in self.keys + self.values})
+        if s is None:
+            return None
+        return type(s)({c.name: c.type for c in self.keys_ + self.values_})
 
     def __post_init__(self):
-        assert self.keys or self.values
+        assert self.keys_ or self.values_
 
     def having(self, *exprs):
         """Add a 'HAVING' clause to the group-by"""
@@ -694,15 +833,15 @@ class GroupBy(ExprNode, ITable, Root):
         exprs += _named_exprs_as_aliases(named_exprs)
 
         resolve_names(self.table, exprs)
-        return self.replace(values=(self.values or []) + exprs)
+        return self.replace(values_=(self.values_ or []) + exprs)
 
     def compile(self, c: Compiler) -> str:
-        if self.values is None:
+        if self.values_ is None:
             raise CompileError(".group_by() must be followed by a call to .agg()")
 
-        keys = [str(i + 1) for i in range(len(self.keys))]
-        columns = (self.keys or []) + (self.values or [])
-        if isinstance(self.table, Select) and self.table.columns is None and self.table.group_by_exprs is None:
+        keys = [str(i + 1) for i in range(len(self.keys_))]
+        columns = (self.keys_ or []) + (self.values_ or [])
+        if isinstance(self.table, Select) and not self.table.columns and self.table.group_by_exprs is None:
             return c.compile(
                 self.table.replace(
                     columns=columns,
@@ -716,13 +855,9 @@ class GroupBy(ExprNode, ITable, Root):
         having_str = (
             " HAVING " + " AND ".join(map(c.compile, self.having_exprs)) if self.having_exprs is not None else ""
         )
-        select = (
-            f"SELECT {columns_str} FROM {c.replace(in_select=True).compile(self.table)} GROUP BY {keys_str}{having_str}"
-        )
+        select = f"SELECT {columns_str} FROM {SelectCompiler(c).compile(self.table)} GROUP BY {keys_str}{having_str}"
 
         if c.in_select:
-            select = f"({select}) {c.new_unique_name()}"
-        elif c.in_join:
             select = f"({select})"
         return select
 
@@ -753,16 +888,41 @@ class TableOp(ExprNode, ITable, Root):
         c = parent_c.replace(in_select=False)
         table_expr = f"{c.compile(self.table1)} {self.op} {c.compile(self.table2)}"
         if parent_c.in_select:
-            table_expr = f"({table_expr}) {c.new_unique_name()}"
-        elif parent_c.in_join:
             table_expr = f"({table_expr})"
         return table_expr
 
 
 @dataclass
+class SelectCompiler(AbstractCompiler):
+    c: Compiler
+
+    def compile(self, elem: Any, params: Dict[str, Any] = None) -> str:
+        if isinstance(elem, (Select, TableOp, GroupBy, Join)):
+            elem = TableAlias(elem, self.c.new_unique_name())
+        c = self.c.replace(in_select=True)
+        return c.compile(elem, params)
+
+    @property
+    def dialect(self):
+        return self.c.dialect
+
+    def add_table_context(self, *tables: Sequence, **kw):
+        return SelectCompiler(self.c.add_table_context(*tables, **kw))
+
+
+@dataclass
+class Desc(ExprNode):
+    expr: ExprNode
+
+    def compile(self, c: Compiler) -> str:
+        e = c.compile(expr)
+        return f"{e} DESC"
+
+
+@dataclass
 class Select(ExprTable, Root):
     table: Expr = None
-    columns: Sequence[Expr] = None
+    columns: SelectColumns = None
     where_exprs: Sequence[Expr] = None
     order_by_exprs: Sequence[Expr] = None
     group_by_exprs: Sequence[Expr] = None
@@ -770,20 +930,25 @@ class Select(ExprTable, Root):
     limit_expr: int = None
     distinct: bool = False
     optimizer_hints: Sequence[Expr] = None
+    postfix: str = None
 
     @property
+    @cache
     def schema(self):
         s = self.table.schema
-        if s is None or self.columns is None:
+        if s is None or not self.columns:
             return s
-        return type(s)({c.name: c.type for c in self.columns})
+        return type(s)(dict(_expand_ellipsis(s, self.columns)))
 
     @property
     def source_table(self):
         return self
 
     def compile(self, parent_c: Compiler) -> str:
-        c = parent_c.replace(in_select=True)  # .add_table_context(self.table)
+        c = SelectCompiler(parent_c)
+
+        if isinstance(self.table, (TablePath,)):
+            c = c.add_table_context(self.table)
 
         columns = ", ".join(map(c.compile, self.columns)) if self.columns else "*"
         distinct = "DISTINCT " if self.distinct else ""
@@ -810,10 +975,11 @@ class Select(ExprTable, Root):
 
         if self.limit_expr is not None:
             select += " " + c.dialect.offset_limit(0, self.limit_expr)
+        
+        if self.postfix:
+            select += self.postfix
 
         if parent_c.in_select:
-            select = f"({select}) {c.new_unique_name()}"
-        elif parent_c.in_join:
             select = f"({select})"
         return select
 
@@ -821,26 +987,29 @@ class Select(ExprTable, Root):
     def make(cls, table: ITable, distinct: bool = SKIP, optimizer_hints: str = SKIP, **kwargs):
         assert "table" not in kwargs
 
-        if not isinstance(table, cls):  # If not Select
-            if distinct is not SKIP:
-                kwargs["distinct"] = distinct
-            if optimizer_hints is not SKIP:
-                kwargs["optimizer_hints"] = optimizer_hints
+        if optimizer_hints is not SKIP:
+            kwargs["optimizer_hints"] = optimizer_hints
+        if distinct is not SKIP:
+            kwargs["distinct"] = distinct
+
+        # If table is not a select, return a new Select instance
+        if not isinstance(table, cls):
+            return cls(table, **kwargs)
+        
+        if 'columns' in kwargs and table.columns is not None:
             return cls(table, **kwargs)
 
         # We can safely assume isinstance(table, Select)
-        if optimizer_hints is not SKIP:
-            kwargs["optimizer_hints"] = optimizer_hints
-
-        if distinct is not SKIP:
-            if distinct is False and table.distinct:
-                return cls(table, **kwargs)
-            kwargs["distinct"] = distinct
-
-        if table.limit_expr or table.group_by_exprs:
+        # We will try to merge them, instead of creating nested instances
+        if distinct is False and table.distinct:
+            # Cannot merge the selects
             return cls(table, **kwargs)
 
-        # Fill in missing attributes, instead of nesting instances
+        if table.limit_expr or table.group_by_exprs:
+            # Cannot merge the selects
+            return cls(table, **kwargs)
+
+        # Fill in missing attributes
         for k, v in kwargs.items():
             if getattr(table, k) is not None:
                 if k == "where_exprs":  # Additive attribute
@@ -917,6 +1086,22 @@ class _ResolveColumn(ExprNode, LazyOps):
     def name(self):
         return self._get_resolved().name
 
+    def __rsub__(self, other):
+        if other is ...:
+            # return Wildcard()
+            pass
+
+        # return super().__rsub__(other)    XXX why does it fail?
+        return LazyOps.__rsub__(self, other)
+
+
+
+
+
+@dataclass
+class Wildcard:
+    exclude: List[str]
+
 
 class This:
     """Builder object for accessing table attributes.
@@ -926,6 +1111,12 @@ class This:
 
     def __getattr__(self, name):
         return _ResolveColumn(name)
+
+    @overload
+    def __getitem__(self, name: str) -> 'This': ...
+    @overload
+    def __getitem__(self, name: (list, tuple)) -> List['This']:
+        ...
 
     def __getitem__(self, name):
         if isinstance(name, (list, tuple)):
@@ -996,7 +1187,7 @@ class Explain(ExprNode, Root):
 
 
 @dataclass
-class CurrentTimestamp(ExprNode):
+class CurrentTimestamp(ExprNode, LazyOps):
     type = datetime
 
     def compile(self, c: Compiler) -> str:
@@ -1039,12 +1230,20 @@ class CreateTable(Statement):
         if self.source_table:
             return f"CREATE TABLE {ne}{c.compile(self.path)} AS {c.compile(self.source_table)}"
 
+        primary_keys = [k for k, v in self.path.schema.items() if isinstance(v, _Field) and v.options.primary_key]
+
+        if self.primary_keys is not None:
+            if primary_keys:
+                assert self.primary_keys == primary_keys
+            else:
+                primary_keys = self.primary_keys
+
+        if primary_keys and c.dialect.SUPPORTS_PRIMARY_KEY:
+            pks = ", PRIMARY KEY (%s)" % ", ".join(primary_keys)
+        else:
+            pks = ""
+
         schema = ", ".join(f"{c.dialect.quote(k)} {c.dialect.type_repr(v)}" for k, v in self.path.schema.items())
-        pks = (
-            ", PRIMARY KEY (%s)" % ", ".join(self.primary_keys)
-            if self.primary_keys and c.dialect.SUPPORTS_PRIMARY_KEY
-            else ""
-        )
         return f"CREATE TABLE {ne}{c.compile(self.path)}({schema}{pks})"
 
 
@@ -1066,23 +1265,57 @@ class TruncateTable(Statement):
         return f"TRUNCATE TABLE {c.compile(self.path)}"
 
 
+class ReturningStatement(Statement):
+    returning_exprs: SelectColumns = None
+
+    @property
+    def type(self):
+        return None if self.returning_exprs is None else ITable
+
+    def returning(self, *exprs):
+        """Add a 'RETURNING' clause to the insert expression.
+
+        Note: Not all databases support this feature!
+        """
+        if self.returning_exprs:
+            raise ValueError("A returning clause is already specified")
+
+        exprs = args_as_tuple(exprs)
+        exprs = _drop_skips(exprs)
+        if not exprs:
+            return self
+
+        resolve_names(self.path, exprs)
+        return self.replace(returning_exprs=exprs)
+
+    def _compile_returning(self, c: Compiler):
+        if not self.returning_exprs:
+            return ""
+
+        columns = ", ".join(map(c.compile, self.returning_exprs))
+        return " RETURNING " + columns
+
 @dataclass
-class DeleteFromTable(Statement):
+class DeleteFromTable(ReturningStatement):
     path: TablePath
     where_exprs: Sequence[Expr] = None
+    returning_exprs: SelectColumns = None
 
     def compile(self, c: Compiler) -> str:
         delete = f"DELETE FROM {c.compile(self.path)}"
         if self.where_exprs:
             delete += " WHERE " + " AND ".join(map(c.compile, self.where_exprs))
+
+        delete += self._compile_returning(c)
         return delete
 
 
 @dataclass
-class UpdateTable(Statement):
+class UpdateTable(ReturningStatement):
     path: TablePath
     updates: Dict[str, Expr]
     where_exprs: Sequence[Expr] = None
+    returning_exprs: SelectColumns = None
 
     def compile(self, c: Compiler) -> str:
         updates = [f"{k} = {c.compile(v)}" for k, v in self.updates.items()]
@@ -1090,15 +1323,22 @@ class UpdateTable(Statement):
 
         if self.where_exprs:
             update += " WHERE " + " AND ".join(map(c.compile, self.where_exprs))
+        update += self._compile_returning(c)
         return update
 
 
 @dataclass
-class InsertToTable(Statement):
+class InsertToTable(ReturningStatement):
     path: TablePath
     expr: Expr
     columns: List[str] = None
-    returning_exprs: List[str] = None
+    returning_exprs: SelectColumns = None
+
+    @property
+    def type(self):
+        if self.returning_exprs:
+            return ITable
+        return None
 
     def compile(self, c: Compiler) -> str:
         if isinstance(self.expr, ConstantTable):
@@ -1108,7 +1348,10 @@ class InsertToTable(Statement):
 
         columns = "(%s)" % ", ".join(map(c.quote, self.columns)) if self.columns is not None else ""
 
-        return f"INSERT INTO {c.compile(self.path)}{columns} {expr}"
+        q = f"INSERT INTO {c.compile(self.path)}{columns} {expr}"
+
+        q += self._compile_returning(c)
+        return q
 
     def returning(self, *exprs):
         """Add a 'RETURNING' clause to the insert expression.

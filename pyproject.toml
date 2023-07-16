@@ -78,3 +78,4 @@ sqeleton = 'sqeleton.__main__:main'
 [tool.ruff]
 line-length = 120
 target-version = "py38"
+

@@ -4,7 +4,7 @@ from ..abcs import DbPath, DbKey
 from ..schema import Schema
 
 
-class _SKIP:
+class T_SKIP:
     def __repr__(self):
         return "SKIP"
 
@@ -12,7 +12,7 @@ class _SKIP:
         return self
 
 
-SKIP = _SKIP()
+SKIP = T_SKIP()
 
 
 class SqeletonError(Exception):

@@ -15,6 +15,7 @@ from ..abcs.database_types import (
 from ..abcs.mixins import AbstractMixin_MD5, AbstractMixin_NormalizeValue
 from .base import BaseDialect, ThreadedDatabase, import_helper, ConnectError, Mixin_Schema
 from .base import MD5_HEXDIGITS, CHECKSUM_HEXDIGITS, _CHECKSUM_BITSIZE, TIMESTAMP_PRECISION_POS, Mixin_RandomSample
+from ..schema import _Field
 
 SESSION_TIME_ZONE = None  # Changed by the tests
 
@@ -99,8 +100,17 @@ class PostgresqlDialect(BaseDialect, Mixin_Schema):
         return "current_timestamp"
 
     def type_repr(self, t) -> str:
+        if isinstance(t, _Field):
+            if t.options.auto:
+                assert t.type is int
+                return "SERIAL"
+            else:
+                t = t.type
+
         if isinstance(t, TimestampTZ):
             return f"timestamp ({t.precision}) with time zone"
+        elif t in (dict, list):
+            return "json"
         return super().type_repr(t)
 
 
