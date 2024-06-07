@@ -6,7 +6,7 @@ authors = ["Erez Shinan <erezshin@gmail.com>"]
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/erezsh/sqeleton"
-documentation = ""
+documentation = "https://sqeleton.readthedocs.io/en/latest/"
 classifiers = [
     "Intended Audience :: Developers",
     "Intended Audience :: Information Technology",
