@@ -852,13 +852,13 @@ jupyter = ["ipywidgets (>=7.5.1,<9)"]
 
 [[package]]
 name = "runtype"
-version = "0.3.5"
+version = "0.4.2"
 description = "Type dispatch and validation for run-time Python"
 optional = false
 python-versions = ">=3.6,<4.0"
 files = [
-    {file = "runtype-0.3.5-py3-none-any.whl", hash = "sha256:9d707a2b0d91604bdfa87a4adf009a64ca7b84e2e8c19d2eafcb5ee7803702f2"},
-    {file = "runtype-0.3.5.tar.gz", hash = "sha256:b738d4a546c300ccec630392b667762c5985ab4ab66e280feb6ef62af76248a3"},
+    {file = "runtype-0.4.2-py3-none-any.whl", hash = "sha256:0e25d408ab6229e7e046b562c3a5f17296b5c777bad7fc037cdc10be88e393a9"},
+    {file = "runtype-0.4.2.tar.gz", hash = "sha256:75c7e18572ff5c38da5b52a47581f2a44e9e5892a91562e004d09586c764318f"},
 ]
 
 [[package]]
@@ -1132,4 +1132,4 @@ vertica = []
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8"
-content-hash = "0dd25f8cb1a6bdf23a65d55d455b34190265365bbeb151b9893ecd1777658908"
+content-hash = "bc2b7eca32dd5a5fc23de20da445f7276c0f8877a6f7e174c1c7425cbb736275"
