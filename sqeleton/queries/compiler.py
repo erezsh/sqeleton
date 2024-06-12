@@ -13,6 +13,7 @@ from runtype import dataclass
 
 from ..utils import ArithString
 from ..abcs import AbstractDatabase, AbstractDialect, DbPath, AbstractCompiler, Compilable
+from .base import SKIP
 
 
 cv_params = contextvars.ContextVar("params")
@@ -87,6 +88,8 @@ class Compiler(AbstractCompiler):
             self = self.replace(_args_enabled=True)
 
         res = self.compile(elem, params)
+        if res is SKIP:
+            return SKIP
 
         if self._args:
             res, args = eval_template(res, self._args, self.dialect.ARG_SYMBOL)
