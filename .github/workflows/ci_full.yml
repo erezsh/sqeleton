@@ -39,13 +39,6 @@ jobs:
         run: "poetry install"
 
       - name: Run unit tests
-        env:
-            # PRESTO_URI: 'presto://presto@127.0.0.1/postgresql/public'
-            # TRINO_URI: 'trino://postgres@127.0.0.1:8081/postgresql/public'
-            # CLICKHOUSE_URI: 'clickhouse://clickhouse:Password1@localhost:9000/clickhouse'
-            # VERTICA_URI: 'vertica://vertica:Password1@localhost:5433/vertica'
-            # SNOWFLAKE_URI: '${{ secrets.SNOWFLAKE_URI }}'
-            # REDSHIFT_URI: '${{ secrets.REDSHIFT_URI }}'
         run: |
           docker ps
           docker network inspect local
