@@ -122,8 +122,10 @@ class Compiler(AbstractCompiler):
             return f"'{elem}'"
         elif isinstance(elem, ArithString):
             return f"'{elem}'"
-        elif isinstance(elem, (str, bytes, bytearray)):
+        elif isinstance(elem, str):
             return self._add_as_param(elem)
+        elif isinstance(elem, (bytes, bytearray)):
+            return self._add_as_param(elem.decode())
         elif isinstance(elem, Compilable):
             return elem.compile(self.replace(_is_root=False))
         elif isinstance(elem, (int, float)):
