@@ -45,7 +45,7 @@ prompt-toolkit = {version="^3.0.36", optional=true}
 parameterized = "*"
 unittest-parallel = "*"
 
-duckdb = "^0.7.0"
+duckdb = "*"
 mysql-connector-python = "*"
 psycopg2 = "*"
 snowflake-connector-python = "^2.7.2"
