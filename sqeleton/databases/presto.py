@@ -138,7 +138,8 @@ class Dialect(BaseDialect, Mixin_Schema):
         return super().parse_type(table_path, col_name, type_repr, datetime_precision, numeric_precision)
 
     def set_timezone_to_utc(self) -> str:
-        return "SET TIME ZONE '+00:00'"
+        # return "SET TIME ZONE '+00:00'"
+        raise NotImplementedError("TODO")
 
     def current_timestamp(self) -> str:
         return "current_timestamp"
