@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "sqeleton"
-version = "0.0.9"
+version = "0.1.0"
 description = "Python library for querying SQL databases"
 authors = ["Erez Shinan <erezshin@gmail.com>"]
 license = "MIT"
@@ -61,7 +61,7 @@ postgresql = ["psycopg2"]
 snowflake = ["snowflake-connector-python", "cryptography"]
 presto = ["presto-python-client"]
 oracle = ["cx_Oracle"]
-# databricks = ["databricks-sql-connector"]
+databricks = ["databricks-sql-connector"]
 trino = ["trino"]
 clickhouse = ["clickhouse-driver"]
 vertica = ["vertica-python"]

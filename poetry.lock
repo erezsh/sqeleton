@@ -1119,6 +1119,7 @@ test = ["big-O", "importlib-resources", "jaraco.functools", "jaraco.itertools", 
 
 [extras]
 clickhouse = ["clickhouse-driver"]
+databricks = []
 duckdb = ["duckdb"]
 mysql = ["mysql-connector-python"]
 oracle = []
@@ -1132,4 +1133,4 @@ vertica = []
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8"
-content-hash = "8ff2e70b7f2e4894a69542904d09fb1d90f01e43c80607e23c85bc72aa7a684e"
+content-hash = "731f547e09901b73dee38f9e7260c50df4f3539710b543d18265a82f0e5ac531"

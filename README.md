@@ -1,7 +1,5 @@
 # Sqeleton
 
-**Note: Sqeleton is still under construction. Many details are open to change.**
-
 Sqeleton is a Python library for querying SQL databases.
 
 It consists of -
@@ -11,7 +9,6 @@ It consists of -
 - A modular database interface, with drivers for a long list of SQL databases.
 
 It is comparable to other libraries such as SQLAlchemy or PyPika, in terms of API and intended audience. However, there are several notable ways in which it is different. 
-
 
 ## **Features:**
 
@@ -166,9 +163,6 @@ def my_outerjoin(
 ```
 
 
-# Sponsors
-
-Special thanks to Datafold for having sponsored Sqeleton in its initial stages. For reference, [the original repo](https://github.com/datafold/sqeleton/).
 
 # TODO
 
@@ -194,3 +188,7 @@ Special thanks to Datafold for having sponsored Sqeleton in its initial stages. 
 - [PyPika](https://github.com/kayak/pypika)
 - [PonyORM](https://ponyorm.org/)
 - [peewee](https://github.com/coleifer/peewee)
+
+# Thanks
+
+Thanks to Datafold for having sponsored Sqeleton in its initial stages. For reference, [the original repo](https://github.com/datafold/sqeleton/).
