@@ -30,7 +30,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Build the stack
-        run: docker-compose up -d mysql postgres presto trino clickhouse vertica
+        run: docker-compose up -d mysql postgres #presto trino clickhouse vertica
 
       - name: Install Poetry
         run: pip install poetry
@@ -40,12 +40,14 @@ jobs:
 
       - name: Run unit tests
         env:
-            PRESTO_URI: 'presto://presto@127.0.0.1/postgresql/public'
-            TRINO_URI: 'trino://postgres@127.0.0.1:8081/postgresql/public'
-            CLICKHOUSE_URI: 'clickhouse://clickhouse:Password1@localhost:9000/clickhouse'
-            VERTICA_URI: 'vertica://vertica:Password1@localhost:5433/vertica'
-            SNOWFLAKE_URI: '${{ secrets.SNOWFLAKE_URI }}'
-            REDSHIFT_URI: '${{ secrets.REDSHIFT_URI }}'
+            # PRESTO_URI: 'presto://presto@127.0.0.1/postgresql/public'
+            # TRINO_URI: 'trino://postgres@127.0.0.1:8081/postgresql/public'
+            # CLICKHOUSE_URI: 'clickhouse://clickhouse:Password1@localhost:9000/clickhouse'
+            # VERTICA_URI: 'vertica://vertica:Password1@localhost:5433/vertica'
+            # SNOWFLAKE_URI: '${{ secrets.SNOWFLAKE_URI }}'
+            # REDSHIFT_URI: '${{ secrets.REDSHIFT_URI }}'
         run: |
-          chmod +x tests/waiting_for_stack_up.sh
-          ./tests/waiting_for_stack_up.sh && poetry run unittest-parallel -j 16
+          docker ps
+          docker network inspect local
+          docker logs mysql
+          poetry run unittest-parallel
