@@ -26,7 +26,7 @@ services:
 
     mysql:
       container_name: dd-mysql
-      image: mysql:oracle
+      image: mysql:master
       # fsync less aggressively for insertion perf for test setup
       command: >
         --default-authentication-plugin=mysql_native_password
