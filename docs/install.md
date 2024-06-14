@@ -43,6 +43,14 @@ Note: Some shells use `"` for escaping instead, like:
 pip install "sqeleton[mysql, postgresql]"
 ```
 
+### Postgresql + Debian
+
+Before installing the postgresql driver, ensure you have libpq-dev:
+
+```bash
+apt-get install libpq-dev
+```
+
 ## Connection editor
 
 Sqeleton provides a TUI connection editor, that can be installed using:

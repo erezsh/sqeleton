@@ -13,6 +13,7 @@ from runtype import dataclass
 
 from ..utils import ArithString
 from ..abcs import AbstractDatabase, AbstractDialect, DbPath, AbstractCompiler, Compilable
+from .base import SKIP
 
 
 cv_params = contextvars.ContextVar("params")
@@ -87,6 +88,8 @@ class Compiler(AbstractCompiler):
             self = self.replace(_args_enabled=True)
 
         res = self.compile(elem, params)
+        if res is SKIP:
+            return SKIP
 
         if self._args:
             res, args = eval_template(res, self._args, self.dialect.ARG_SYMBOL)
@@ -119,8 +122,10 @@ class Compiler(AbstractCompiler):
             return f"'{elem}'"
         elif isinstance(elem, ArithString):
             return f"'{elem}'"
-        elif isinstance(elem, (str, bytes, bytearray)):
+        elif isinstance(elem, str):
             return self._add_as_param(elem)
+        elif isinstance(elem, (bytes, bytearray)):
+            return self._add_as_param(elem.decode())
         elif isinstance(elem, Compilable):
             return elem.compile(self.replace(_is_root=False))
         elif isinstance(elem, (int, float)):

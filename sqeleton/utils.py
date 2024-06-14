@@ -156,10 +156,10 @@ class ArithString(ABC):
         checkpoints = split_space(self.int, other.int, count)
         return [self.new(int=i) for i in checkpoints]
 
-    @property
-    @abstractmethod
-    def int(self):
-        ...
+    # @property
+    # @abstractmethod
+    # def int(self):
+    #     ...
 
 
 class ArithUUID(UUID, ArithString):
@@ -223,10 +223,6 @@ class ArithAlphanumeric(ArithString):
 
         self._str = s
         self._max_len = max_len
-
-    # @property
-    # def int(self):
-    #     return alphanumToNumber(self._str, alphanums)
 
     def __str__(self):
         s = self._str

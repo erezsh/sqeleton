@@ -33,6 +33,8 @@ class Dialect(presto.Dialect):
     name = "Trino"
     ARG_SYMBOL = "?"
 
+    def set_timezone_to_utc(self) -> str:
+        return "SET TIME ZONE '+00:00'"
 
 class Trino(presto.Presto):
     dialect = Dialect()

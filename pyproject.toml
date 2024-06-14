@@ -6,7 +6,7 @@ authors = ["Erez Shinan <erezshin@gmail.com>"]
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/erezsh/sqeleton"
-documentation = ""
+documentation = "https://sqeleton.readthedocs.io/en/latest/"
 classifiers = [
     "Intended Audience :: Developers",
     "Intended Audience :: Information Technology",
@@ -23,7 +23,7 @@ packages = [{ include = "sqeleton" }]
 
 [tool.poetry.dependencies]
 python = "^3.8"
-runtype = "^0.3.5"
+runtype = "^0.4.2"
 dsnparse = "*"
 click = "^8.1"
 rich = "*"
@@ -45,7 +45,7 @@ prompt-toolkit = {version="^3.0.36", optional=true}
 parameterized = "*"
 unittest-parallel = "*"
 
-duckdb = "^0.7.0"
+duckdb = "*"
 mysql-connector-python = "*"
 psycopg2 = "*"
 snowflake-connector-python = "^2.7.2"
