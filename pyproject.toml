@@ -1,12 +1,12 @@
 [tool.poetry]
 name = "sqeleton"
-version = "0.0.9b"
+version = "0.0.8"
 description = "Python library for querying SQL databases"
 authors = ["Erez Shinan <erezshin@gmail.com>"]
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/erezsh/sqeleton"
-documentation = ""
+documentation = "https://github.com/erezsh/sqeleton"
 classifiers = [
     "Intended Audience :: Developers",
     "Intended Audience :: Information Technology",
