@@ -41,5 +41,5 @@ jobs:
       - name: Run unit tests
         run: |
           docker ps
-          docker logs mysql
+          docker logs dd-mysql
           poetry run unittest-parallel
