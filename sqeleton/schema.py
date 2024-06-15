@@ -10,8 +10,6 @@ logger = logging.getLogger("schema")
 
 Schema = CaseAwareMapping
 
-# SKIP = object() # TODO: Use same SKIP
-
 class TableType:
     pass
     # TODO: This should replace the current Schema type
