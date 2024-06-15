@@ -67,6 +67,8 @@ def table(*path: str, schema: SchemaInput = None) -> TablePath:
     """
     if len(path) == 1 and isinstance(path[0], tuple):
         (path,) = path
+    if len(path) == 1 and isinstance(path[0], TablePath):
+        path = path[0].path
     if not all(isinstance(i, str) for i in path):
         raise TypeError(f"All elements of table path must be of type 'str'. Got: {path}")
 

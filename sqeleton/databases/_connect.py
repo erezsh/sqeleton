@@ -1,3 +1,4 @@
+import urllib
 from typing import Type, Optional, Union, Dict
 from itertools import zip_longest
 from contextlib import suppress
@@ -32,7 +33,7 @@ class MatchUriPath:
         params = self.database_cls.CONNECT_URI_PARAMS
         kwparams = self.database_cls.CONNECT_URI_KWPARAMS
 
-        dsn_dict = dict(dsn.query)
+        dsn_dict = dict(urllib.parse.parse_qsl(dsn.query))
         matches = {}
         for param, arg in zip_longest(params, dsn.paths):
             if param is None:

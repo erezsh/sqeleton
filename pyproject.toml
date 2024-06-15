@@ -23,23 +23,23 @@ packages = [{ include = "sqeleton" }]
 
 [tool.poetry.dependencies]
 python = "^3.8"
-runtype = "^0.4.2"
+runtype = ">=0.4.2"
 dsnparse = "*"
-click = "^8.1"
+click = ">=8.1"
 rich = "*"
-toml = "^0.10.2"
-mysql-connector-python = {version="8.0.29", optional=true}
+toml = ">=0.10.2"
+mysql-connector-python = {version=">=8.0.29", optional=true}
 psycopg2 = {version="*", optional=true}
-snowflake-connector-python = {version="^2.7.2", optional=true}
+snowflake-connector-python = {version=">=2.7.2", optional=true}
 cryptography = {version="*", optional=true}
-trino = {version="^0.314.0", optional=true}
+trino = {version=">=0.314.0", optional=true}
 presto-python-client = {version="*", optional=true}
 clickhouse-driver = {version="*", optional=true}
-duckdb = {version="^0.7.0", optional=true}
-textual = {version="^0.9.1", optional=true}
+duckdb = {version=">=0.7.0", optional=true}
+textual = {version=">=0.9.1", optional=true}
 textual-select = {version="*", optional=true}
-pygments = {version="^2.13.0", optional=true}
-prompt-toolkit = {version="^3.0.36", optional=true}
+pygments = {version=">=2.13.0", optional=true}
+prompt-toolkit = {version=">=3.0.36", optional=true}
 
 [tool.poetry.dev-dependencies]
 parameterized = "*"
@@ -48,9 +48,9 @@ unittest-parallel = "*"
 duckdb = "*"
 mysql-connector-python = "*"
 psycopg2 = "*"
-snowflake-connector-python = "^2.7.2"
+snowflake-connector-python = ">=2.7.2"
 cryptography = "*"
-trino = "^0.314.0"
+trino = ">=0.314.0"
 presto-python-client = "*"
 clickhouse-driver = "*"
 vertica-python = "*"

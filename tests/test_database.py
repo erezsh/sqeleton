@@ -117,10 +117,10 @@ class TestQueries(unittest.TestCase):
             ms = now.microsecond // 1000 * 1000  # Presto max precision is 3
             now = now.replace(microsecond=ms)
 
-        db.query(table(name).insert_row(1, now, now))
+        db.query(tbl.insert_row(1, now, now))
         db.query(db.dialect.set_timezone_to_utc())
 
-        t = db.table(name).query_schema()
+        t = db.table(tbl).query_schema()
         t.schema["created_at"] = t.schema["created_at"].replace(precision=t.schema["created_at"].precision)
 
         tbl = table(name, schema=t.schema)
