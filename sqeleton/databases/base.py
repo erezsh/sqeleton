@@ -21,7 +21,7 @@ from concurrent.futures import ThreadPoolExecutor
 import threading
 from abc import abstractmethod
 
-from runtype import dataclass
+from runtype import dataclass, issubclass
 
 from sqeleton.queries.compiler import CompiledCode
 
@@ -391,6 +391,7 @@ class Database(AbstractDatabase[T]):
                 sys.exit(1)
 
         res = self._query(sql_code)
+
         if res_type == None:
             pass    # Do no casting
         elif res is None:
@@ -416,17 +417,15 @@ class Database(AbstractDatabase[T]):
         elif res_type is tuple:
             assert len(res) == 1, (sql_code, res)
             return res[0]
-        elif getattr(res_type, "__origin__", None) is list and len(res_type.__args__) == 1:
-            if res_type.__args__ in ((int,), (str,), (bytes,), (float,)):
-                return [_one(row) for row in res]
-            elif res_type.__args__ in [(Tuple,), (tuple,)]:
-                return [tuple(row) for row in res]
-            elif res_type.__args__ == (dict,):
-                return [dict(safezip(res.columns, row)) for row in res]
-            else:
-                (elem_type,) = res_type.__args__
-                return [elem_type(**dict(safezip(res.columns, row))) for row in res]
-                # raise ValueError(res_type)
+        elif issubclass(res_type, List[Union[int, str, bytes, float]]):
+            return [_one(row) for row in res]
+        elif issubclass(res_type, List[tuple]):
+            return [tuple(row) for row in res]
+        elif issubclass(res_type, List[dict]):
+            return [dict(safezip(res.columns, row)) for row in res]
+        elif issubclass(res_type, List[type]):
+            (elem_type,) = res_type.__args__
+            return [elem_type(**dict(safezip(res.columns, row))) for row in res]
         else:
             if len(res) == 0:
                 return None     # TODO: Only allow if res_type is Optional
