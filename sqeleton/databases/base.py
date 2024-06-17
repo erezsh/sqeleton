@@ -416,7 +416,7 @@ class Database(AbstractDatabase[T]):
             return res
         elif res_type is tuple:
             assert len(res) == 1, (sql_code, res)
-            return res[0]
+            return tuple(res[0])
         elif issubclass(res_type, List[Union[int, str, bytes, float]]):
             return [_one(row) for row in res]
         elif issubclass(res_type, List[tuple]):
