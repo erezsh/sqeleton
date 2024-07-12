@@ -53,9 +53,7 @@ class Trino(presto.Presto):
             )
             kw["http_scheme"] = "https"
 
-        if "cert" in kw:
-            cert = kw.pop("cert")
-            self._conn = trino.dbapi.connect(**kw)
+        cert = kw.pop("cert", None)
+        self._conn = trino.dbapi.connect(**kw)
+        if cert is not None:
             self._conn._http_session.verify = cert
-        else:
-            self._conn = trino.dbapi.connect(**kw)
