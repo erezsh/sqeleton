@@ -13,10 +13,12 @@ cat dev/trino-conf/etc/trino-cert.pem dev/trino-conf/etc/trino-key.pem > dev/tri
 Include the following lines in dev/trino-conf/etc/config.properties
 
 ```
+http-server.https.port=8443
 http-server.https.enabled=true
 http-server.https.keystore.path=/etc/trino/trino-combined.pem
 http-server.https.keystore.key=<key>
 http-server.authentication.type=PASSWORD
+internal-communication.shared-secret="secret"
 ```
 
 ## Create a password.db file
