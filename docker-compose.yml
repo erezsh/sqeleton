@@ -89,10 +89,11 @@ services:
 
     trino:
         container_name: dd-trino
-        image: 'trinodb/trino:389'
+        image: 'trinodb/trino:450'
         hostname: trino
         ports:
             - '8081:8080'
+            - '8443:8443'
         volumes:
             - ./dev/trino-conf/etc:/etc/trino:ro
         networks:
