@@ -5,7 +5,7 @@ In order to test Trino with user@password you need a local cluster with Basic Au
 ## First thing, we need a self signed cert.
 ```
 openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout dev/trino-conf/etc/trino-key.pem -out dev/trino-conf/etc/trino-cert.pem -config dev/trino-conf/cert.conf
-cat trino-cert.pem trino-key.pem > trino-combined.pem
+cat dev/trino-conf/etc/trino-cert.pem dev/trino-conf/etc/trino-key.pem > dev/trino-conf/etc/trino-combined.pem
 ```
 
 ## Include https settings in config.properties
