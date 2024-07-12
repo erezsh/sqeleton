@@ -21,9 +21,7 @@ class Mixin_NormalizeValue(presto.Mixin_NormalizeValue):
         else:
             s = f"date_format(cast({value} as timestamp(6)), '%Y-%m-%d %H:%i:%S.%f')"
 
-        return (
-            f"RPAD(RPAD({s}, {TIMESTAMP_PRECISION_POS + coltype.precision}, '.'), {TIMESTAMP_PRECISION_POS + 6}, '0')"
-        )
+        return f"RPAD(RPAD({s}, {TIMESTAMP_PRECISION_POS + coltype.precision}, '.'), {TIMESTAMP_PRECISION_POS + 6}, '0')"
 
     def normalize_uuid(self, value: str, coltype: ColType_UUID) -> str:
         return f"TRIM({value})"
@@ -36,15 +34,28 @@ class Dialect(presto.Dialect):
     def set_timezone_to_utc(self) -> str:
         return "SET TIME ZONE '+00:00'"
 
+
 class Trino(presto.Presto):
     dialect = Dialect()
     CONNECT_URI_HELP = "trino://<user>@<host>/<catalog>/<schema>"
     CONNECT_URI_PARAMS = ["catalog", "schema"]
+    # CONNECT_URI_HELP = "trino://<user>:<password>@<host>:<port>/<catalog>/<schema>"
+    # CONNECT_URI_PARAMS = ["password", "catalog", "schema"]
 
     def __init__(self, **kw):
+
         trino = import_trino()
 
         if kw.get("schema"):
             self.default_schema = kw.get("schema")
 
-        self._conn = trino.dbapi.connect(**kw)
+        if kw.get("password"):
+            kw["auth"] = trino.auth.BasicAuthentication(kw.pop("user"), kw.pop("password"))
+            kw["http_scheme"] = "https"
+
+        if "cert" in kw:
+            cert = kw.pop("cert")
+            self._conn = trino.dbapi.connect(**kw)
+            self._conn._http_session.verify = cert
+        else:
+            self._conn = trino.dbapi.connect(**kw)
