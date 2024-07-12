@@ -39,8 +39,6 @@ class Trino(presto.Presto):
     dialect = Dialect()
     CONNECT_URI_HELP = "trino://<user>@<host>/<catalog>/<schema>"
     CONNECT_URI_PARAMS = ["catalog", "schema"]
-    # CONNECT_URI_HELP = "trino://<user>:<password>@<host>:<port>/<catalog>/<schema>"
-    # CONNECT_URI_PARAMS = ["password", "catalog", "schema"]
 
     def __init__(self, **kw):
 
@@ -50,7 +48,9 @@ class Trino(presto.Presto):
             self.default_schema = kw.get("schema")
 
         if kw.get("password"):
-            kw["auth"] = trino.auth.BasicAuthentication(kw.pop("user"), kw.pop("password"))
+            kw["auth"] = trino.auth.BasicAuthentication(
+                kw.pop("user"), kw.pop("password")
+            )
             kw["http_scheme"] = "https"
 
         if "cert" in kw:
