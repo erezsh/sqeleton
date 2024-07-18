@@ -56,15 +56,15 @@ class BoundTable(BoundNode):  # ITable
         table_path = self.node.replace(schema=schema)
         return self.replace(node=table_path)
 
-    def query_schema(self, *, columns=None, where=None, case_sensitive=True):
+    def query_schema(self, *, refine: bool = True, refine_where = None, case_sensitive=True):
         table_path = self.node
 
         if table_path.schema:
             return self
 
         raw_schema = self.database.query_table_schema(table_path.path)
-        schema = self.database._process_table_schema(table_path.path, raw_schema, columns, where)
-        schema = create_schema(self.database, table_path, schema, case_sensitive)
+        schema, _samples = self.database.process_query_table_schema(table_path.path, raw_schema, refine, refine_where)
+        schema = create_schema(self.database, table_path.path, schema, case_sensitive)
         return self.with_schema(schema)
 
     @property
@@ -77,6 +77,5 @@ def bound_table(database: AbstractDatabase, table_path: Union[TablePath, str, tu
 
 
 if TYPE_CHECKING:
-
     class BoundTable(BoundTable, TablePath):
         pass

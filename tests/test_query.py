@@ -67,6 +67,7 @@ class MockDatabase(AbstractDatabase):
     query_table_schema = NotImplemented
     select_table_schema = NotImplemented
     _process_table_schema = NotImplemented
+    process_query_table_schema = NotImplemented
     parse_table_name = NotImplemented
     close = NotImplemented
     _normalize_table_path = NotImplemented

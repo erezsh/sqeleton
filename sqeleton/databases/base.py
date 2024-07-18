@@ -2,20 +2,7 @@ from datetime import datetime
 import math
 import sys
 import logging
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    Generator,
-    Tuple,
-    Optional,
-    Sequence,
-    List,
-    Union,
-    TypeVar,
-    Type,
-    overload
-)
+from typing import Any, Callable, Dict, Generator, Tuple, Optional, Sequence, List, Union, TypeVar, Type, overload
 from functools import partial, wraps
 from concurrent.futures import ThreadPoolExecutor
 import threading
@@ -134,16 +121,15 @@ class ThreadLocalInterpreter:
             except StopIteration:
                 break
 
+
 SqlCode = Union[str, CompiledCode, ThreadLocalInterpreter]
 
 
-def apply_query(
-    callback: Callable[[CompiledCode], Any], sql_code: SqlCode
-) -> Optional[QueryResult]:
+def apply_query(callback: Callable[[CompiledCode], Any], sql_code: SqlCode) -> Optional[QueryResult]:
     if isinstance(sql_code, ThreadLocalInterpreter):
         return sql_code.apply_queries(callback)
     elif isinstance(sql_code, str):
-        sql_code = CompiledCode(sql_code, [], None) # Unknown type. #TODO: Should we guess?
+        sql_code = CompiledCode(sql_code, [], None)  # Unknown type. #TODO: Should we guess?
 
     return callback(sql_code)
 
@@ -152,7 +138,7 @@ class Mixin_Schema(AbstractMixin_Schema):
     def table_information(self) -> TablePath:
         return table("information_schema", "tables")
 
-    def list_tables(self, table_schema: str, like: Compilable = None) -> Compilable:
+    def list_tables(self, table_schema: str, like: Compilable = None) -> Select:
         return (
             self.table_information()
             .where(
@@ -307,6 +293,7 @@ TRes = TypeVar("TRes")
 QueryInputItem = Union[CompilableNode, T_SKIP]
 QueryInput = Union[str, QueryInputItem, Generator, List[QueryInputItem]]
 
+
 class Database(AbstractDatabase[T]):
     """Base abstract class for databases.
 
@@ -323,6 +310,8 @@ class Database(AbstractDatabase[T]):
 
     _interactive = False
     is_closed = False
+
+    dialect: AbstractDialect
 
     @property
     def name(self):
@@ -350,7 +339,7 @@ class Database(AbstractDatabase[T]):
     def query(self, query_input: QueryInput, res_type: Type[TRes]) -> TRes:
         ...
 
-    def query(self, query_input, res_type = None):
+    def query(self, query_input, res_type=None):
         """Query the given SQL code/AST, and attempt to convert the result to type 'res_type'
 
         If given a generator:
@@ -393,7 +382,7 @@ class Database(AbstractDatabase[T]):
         res = self._query(sql_code)
 
         if res_type == None:
-            pass    # Do no casting
+            pass  # Do no casting
         elif res is None:
             assert res_type is not None
             raise ValueError(f"Query returned NULL, but query() is expecting type {res_type}")
@@ -433,7 +422,7 @@ class Database(AbstractDatabase[T]):
                     return [elem_type(**dict(safezip(res.columns, row))) for row in res]
 
             if len(res) == 0:
-                return None     # TODO: Only allow if res_type is Optional
+                return None  # TODO: Only allow if res_type is Optional
             assert len(res) == 1, len(res)
             d = dict(safezip(res.columns, res[0]))
             return res_type(**d)
@@ -487,12 +476,25 @@ class Database(AbstractDatabase[T]):
 
         col_dict = {row[0]: self.dialect.parse_type(path, *row) for _name, row in filtered_schema.items()}
 
-        self._refine_coltypes(path, col_dict, where)
+        samples = self._refine_coltypes(path, col_dict, where)
+        if samples is not None and not samples:
+            raise ValueError(f"Table {path} appears to be empty")
 
         # Return a dict of form {name: type} after normalization
         return col_dict
 
-    def _refine_coltypes(self, table_path: DbPath, col_dict: Dict[str, ColType], where: str = None, sample_size=64):
+    def process_query_table_schema(
+        self, path: Tuple[str], raw_schema: Dict[str, Tuple], refine: bool = True, refine_where: Optional[str] = None
+    ) -> Tuple[Dict[str, ColType], Optional[list]]:
+        col_dict = {name: self.dialect.parse_type(path, *row) for name, row in raw_schema.items()}
+
+        samples = self._refine_coltypes(path, col_dict, refine_where) if refine else None
+
+        return col_dict, samples
+
+    def _refine_coltypes(
+        self, table_path: DbPath, col_dict: Dict[str, ColType], where: Optional[str] = None, sample_size=64
+    ):
         """Refine the types in the column dict, by querying the database for a sample of their values
 
         'where' restricts the rows to be sampled.
@@ -500,7 +502,7 @@ class Database(AbstractDatabase[T]):
 
         text_columns = [k for k, v in col_dict.items() if isinstance(v, Text)]
         if not text_columns:
-            return
+            return None
 
         if isinstance(self.dialect, AbstractMixin_NormalizeValue):
             fields = [Code(self.dialect.normalize_uuid(self.dialect.quote(c), String_UUID())) for c in text_columns]
@@ -511,7 +513,7 @@ class Database(AbstractDatabase[T]):
             table(*table_path).select(*fields).where(Code(where) if where else SKIP).limit(sample_size), list
         )
         if not samples_by_row:
-            raise ValueError(f"Table {table_path} is empty.")
+            return []
 
         samples_by_col = list(zip(*samples_by_row))
 
@@ -539,6 +541,8 @@ class Database(AbstractDatabase[T]):
                         assert col_name in col_dict
                         col_dict[col_name] = String_VaryingAlphanum()
 
+        return samples_by_row
+
     # @lru_cache()
     # def get_table_schema(self, path: DbPath) -> Dict[str, ColType]:
     #     return self.query_table_schema(path)
@@ -560,7 +564,9 @@ class Database(AbstractDatabase[T]):
             logger.debug(f"{self.name} Executing SQL: {sql_code.code} || {sql_code.args}")
             c.execute(sql_code.code, sql_code.args)
             # insert, delete and update may return values if they have the "returning" clause.
-            if sql_code.type is not None or sql_code.code.lstrip().lower().startswith(("select", "explain", "show", "with")):
+            if sql_code.type is not None or sql_code.code.lstrip().lower().startswith(
+                ("select", "explain", "show", "with")
+            ):
                 columns = c.description and [col[0] for col in c.description]
                 return QueryResult(c.fetchall(), columns)
         except Exception as _e:
@@ -578,7 +584,7 @@ class Database(AbstractDatabase[T]):
         return super().close()
 
     def list_tables(self, tables_like, schema=None):
-        self.dialect: Mixin_Schema
+        assert isinstance(self.dialect, Mixin_Schema)
         return self.query(self.dialect.list_tables(schema or self.default_schema, tables_like))
 
     def table(self, *path, **kw):

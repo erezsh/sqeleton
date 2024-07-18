@@ -1,5 +1,5 @@
 import math
-from typing import Dict, Sequence
+from typing import Dict, Sequence, Optional, Tuple
 import logging
 
 from ..abcs.database_types import (
@@ -177,6 +177,11 @@ class Databricks(ThreadedDatabase):
 
         self._refine_coltypes(path, col_dict, where)
         return col_dict
+
+    def process_query_table_schema(self, path: DbPath, raw_schema: Dict[str, Tuple], refine: bool = True, refine_where: Optional[str] = None) -> Tuple[Dict[str, ColType], Optional[list]]:
+        if not refine:
+            raise NotImplementedError()
+        return self._process_table_schema(path, raw_schema, list(raw_schema), refine_where), None
 
     def parse_table_name(self, name: str) -> DbPath:
         path = parse_table_name(name)
