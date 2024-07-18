@@ -125,7 +125,9 @@ class String_FixedAlphanum(String_Alphanum):
 
     def make_value(self, value):
         if len(value) != self.length:
-            raise ValueError(f"Expected alphanumeric value of length {self.length}, but got '{value}'.")
+            raise ValueError(
+                f"Expected alphanumeric value of length {self.length}, but got '{value}'."
+            )
         return self.python_type(value, max_len=self.length)
 
 
@@ -257,11 +259,13 @@ class AbstractDatabase(Generic[T_Dialect]):
 
     @abstractmethod
     def query_table_schema(self, path: DbPath) -> Dict[str, tuple]:
-        """Query the table for its schema for table in 'path', and return {column: tuple}
+        """Query the database for the schema of the table in 'path', and return {column: tuple, ...}
         where the tuple is (table_name, col_name, type_repr, datetime_precision?, numeric_precision?, numeric_scale?)
 
-        Note: This method exists instead of select_table_schema(), just because not all databases support
-              accessing the schema using a SQL query.
+        Use the method .process_query_table_schema() to convert the tuples into types.
+
+        Note: This method is used instead of select_table_schema(),
+              because not all databases support accessing the schema using a SQL query.
         """
 
     @abstractmethod
@@ -274,7 +278,11 @@ class AbstractDatabase(Generic[T_Dialect]):
 
     @abstractmethod
     def _process_table_schema(
-        self, path: DbPath, raw_schema: Dict[str, tuple], filter_columns: Sequence[str], where: str = None
+        self,
+        path: DbPath,
+        raw_schema: Dict[str, tuple],
+        filter_columns: Sequence[str],
+        where: str = None,
     ):
         """Process the result of query_table_schema().
 
@@ -283,6 +291,26 @@ class AbstractDatabase(Generic[T_Dialect]):
         * throw errors and warnings
         * query the database to sample values
 
+        """
+
+    @abstractmethod
+    def process_query_table_schema(
+        self,
+        path: DbPath,
+        raw_schema: Dict[str, tuple],
+        refine: bool = True,
+        refine_where: Optional[str] = None,
+    ) -> Tuple[Dict[str, ColType], Optional[list]]:
+        """Process the result of query_table_schema().
+
+        We are doing it here, separately, because:
+         - parse_type() may throw an exception. Therefor, some users may want to query
+           each column separately.
+         - Refining the column types may query the database to sample values, and some
+           users may want to do so in separate threads.
+
+        If refine is True, it samples the table data to refine the column types when possible.
+        Use refine_where to filter the rows that may be sampled.
         """
 
     @abstractmethod
