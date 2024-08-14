@@ -57,3 +57,8 @@ class Trino(presto.Presto):
         self._conn = trino.dbapi.connect(**kw)
         if cert is not None:
             self._conn._http_session.verify = cert
+
+
+    @property
+    def is_autocommit(self) -> bool:
+        return True
