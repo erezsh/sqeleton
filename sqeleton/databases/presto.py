@@ -34,13 +34,9 @@ from ..queries.compiler import CompiledCode
 def query_cursor(c, sql_code: CompiledCode) -> Optional[QueryResult]:
     logger.debug(f"[Presto] Executing SQL: {sql_code.code} || {sql_code.args}")
     c.execute(sql_code.code, sql_code.args)
-    if sql_code.code.lower().startswith("select"):
-        # columns = [col[0] for col in c.description]
-        # return QueryResult(c.fetchall(), columns)
-        return c.fetchall()
-    # Required for the query to actually run 🤯
-    if re.match(r"(insert|create|truncate|drop|explain)", sql_code.code, re.IGNORECASE):
-        return c.fetchone()
+
+    columns = c.description and [col[0] for col in c.description]
+    return QueryResult(c.fetchall(), columns)
 
 
 @import_helper("presto")
