@@ -48,6 +48,9 @@ class MockDialect(AbstractDialect):
     def timestamp_value(self, t: datetime) -> str:
         return f"timestamp '{t}'"
 
+    def uuid_value(self, u) -> str:
+        return f"'{u}'"
+
     def set_timezone_to_utc(self) -> str:
         return "set timezone 'UTC'"
 

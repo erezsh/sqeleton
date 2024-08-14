@@ -1,3 +1,5 @@
+import uuid
+
 from ..abcs.database_types import TemporalType, ColType_UUID, String_UUID
 from . import presto
 from .base import import_helper
@@ -35,6 +37,9 @@ class Dialect(presto.Dialect):
 
     def set_timezone_to_utc(self) -> str:
         return "SET TIME ZONE '+00:00'"
+
+    def uuid_value(self, u: uuid.UUID) -> str:
+        return f"CAST('{u}' AS UUID)"
 
 
 class Trino(presto.Presto):

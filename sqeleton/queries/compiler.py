@@ -119,7 +119,7 @@ class Compiler(AbstractCompiler):
         if elem is None:
             return "NULL"
         elif isinstance(elem, UUID):
-            return f"'{elem}'"
+            return self.dialect.uuid_value(elem)
         elif isinstance(elem, ArithString):
             return f"'{elem}'"
         elif isinstance(elem, str):
