@@ -20,6 +20,7 @@ from ..abcs.database_types import (
     ColType_UUID,
     TemporalType,
     Boolean,
+    Native_UUID,
 )
 from ..abcs.mixins import AbstractMixin_MD5, AbstractMixin_NormalizeValue
 from .base import BaseDialect, Database, QueryResult, import_helper, ThreadLocalInterpreter, Mixin_Schema, Mixin_RandomSample, SqlCode, logger
@@ -90,6 +91,8 @@ class Dialect(BaseDialect, Mixin_Schema):
         "varchar": Text,
         # Boolean
         "boolean": Boolean,
+        # UUID
+        "uuid": Native_UUID,
     }
     MIXINS = {Mixin_Schema, Mixin_MD5, Mixin_NormalizeValue, Mixin_RandomSample}
 

@@ -1,4 +1,4 @@
-from ..abcs.database_types import TemporalType, ColType_UUID
+from ..abcs.database_types import TemporalType, ColType_UUID, String_UUID
 from . import presto
 from .base import import_helper
 from .base import TIMESTAMP_PRECISION_POS
@@ -24,7 +24,9 @@ class Mixin_NormalizeValue(presto.Mixin_NormalizeValue):
         return f"RPAD(RPAD({s}, {TIMESTAMP_PRECISION_POS + coltype.precision}, '.'), {TIMESTAMP_PRECISION_POS + 6}, '0')"
 
     def normalize_uuid(self, value: str, coltype: ColType_UUID) -> str:
-        return f"TRIM({value})"
+        if isinstance(coltype, String_UUID):
+            return f"TRIM({value})"
+        return f"CAST({value} AS VARCHAR)"
 
 
 class Dialect(presto.Dialect):
