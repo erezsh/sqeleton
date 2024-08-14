@@ -1,3 +1,4 @@
+import uuid
 import decimal
 from abc import ABC, abstractmethod
 from typing import Sequence, Optional, Tuple, Union, Dict, List, TypeVar, Generic, Any
@@ -206,6 +207,10 @@ class AbstractDialect(ABC):
     @abstractmethod
     def timestamp_value(self, t: datetime) -> str:
         "Provide SQL for the given timestamp value"
+
+    @abstractmethod
+    def uuid_value(self, t: uuid.UUID) -> str:
+        "Provide SQL for the given UUID value"
 
     @abstractmethod
     def set_timezone_to_utc(self) -> str:

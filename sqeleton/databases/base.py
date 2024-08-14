@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime
 import math
 import sys
@@ -188,6 +189,9 @@ class BaseDialect(AbstractDialect):
 
     def timestamp_value(self, t: DbTime) -> str:
         return f"'{t.isoformat()}'"
+
+    def uuid_value(self, u: uuid.UUID) -> str:
+        return f"'{u}'"
 
     def random(self) -> str:
         return "random()"
