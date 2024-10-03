@@ -184,7 +184,7 @@ class Snowflake(Database):
             )
 
         self._conn = snowflake.connector.connect(schema=f'"{schema}"', **kw)
-
+        self._conn.telemetry_enabled = False
         self.default_schema = schema
 
     def close(self):
