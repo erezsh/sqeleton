@@ -1,4 +1,4 @@
-from .compiler import Compiler, CompileError
+from .compiler import CompileError, Compiler
 from .base import SKIP, T_SKIP
 from .api import (
     this,

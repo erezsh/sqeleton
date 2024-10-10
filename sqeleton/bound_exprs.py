@@ -37,7 +37,7 @@ class BoundNode(ExprNode):
 
     def compile(self, c: AbstractCompiler) -> str:
         assert c.database is self.database
-        return self.node.compile(c)
+        return c.compile_elem(self.node)
 
 
 def bind_node(node, database):
