@@ -1,6 +1,5 @@
 from typing import Optional
 
-from ..utils import CaseAwareMapping, CaseSensitiveDict
 from .ast_classes import *
 from .base import args_as_tuple
 from ..schema import SchemaInput, _Schema
