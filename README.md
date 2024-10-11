@@ -6,26 +6,26 @@ It consists of -
 
 - A fast and concise query builder, designed from scratch, but inspired by PyPika and SQLAlchemy
 
-- A modular database interface, with drivers for a long list of SQL databases.
+- A modular database interface, with drivers for a long list of SQL databases (see below)
 
 It is comparable to other libraries such as SQLAlchemy or PyPika, in terms of API and intended audience. However, there are several notable ways in which it is different. 
 
 ## **Features:**
 
-🏃‍♂️**High-performance**: Sqeleton's API is designed to maximize performance using batch operations
+🏃‍♂️ **High-performance**: Sqeleton's API is designed to maximize performance using batch operations
 
-- No ORM! While ORMs are easy and familiar, their granular operations are far too slow.
+- No ORM. Sqeleton takes the position that while ORMs feel easy and familiar, their granular operations are far too slow.
 - Compiles queries 4 times faster than SQLAlchemy
 
-🙌**Parallel**: Seamless multi-threading and multi-processing support
+🙌 **Parallel**: Seamless multi-threading and multi-processing support
 
-💖**Well-tested**: In addition to having an extensive test-suite, sqeleton is used as the core of [data-diff](https://github.com/datafold/data-diff).
+💖 **Well-tested**: In addition to having an extensive test-suite, sqeleton is used as the core of [data-diff](https://github.com/datafold/data-diff) (now [reladiff](https://github.com/erezsh/reladiff)).
 
-✅**Type-aware**: The schema is used for validation when building expressions, making sure the names are correct, and that the data-types align. (WIP)
+✅ **Type-aware**: The schema is used for validation when building expressions, making sure the names are correct, and that the data-types align. (WIP)
     
 - The schema can be queried at run-time, if the tables already exist in the database
 
-✨**Multi-database access**: Sqeleton is designed to work with several databases at the same time. Its API abstracts away as many implementation details as possible.
+✨ **Multi-database access**: Sqeleton is designed to work with several databases at the same time. Its API abstracts away as many implementation details as possible.
 
 _Databases we fully support_:
 
@@ -43,7 +43,7 @@ _Databases we fully support_:
 - DuckDB >=0.6
 - SQLite (coming soon)
 
-💻**Built-in SQL client**: Connect to any of the supported databases with just one line.
+💻 **Built-in SQL client**: Connect to any of the supported databases with just one line.
 
 Example usage: `sqeleton repl snowflake://...`
 
