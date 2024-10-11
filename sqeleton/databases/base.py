@@ -36,7 +36,6 @@ from ..abcs.database_types import (
     DbPath,
     Boolean,
 )
-from ..schema import Options
 from ..abcs.mixins import Compilable
 from ..abcs.mixins import (
     AbstractMixin_Schema,
