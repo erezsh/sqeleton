@@ -43,7 +43,7 @@ class CompilableNode(Compilable):
 
     def _dfs_values(self):
         yield self
-        for k, vs in dict(self).items():  # __dict__ provided by runtype.dataclass
+        for k, vs in self.asdict().items():  # __dict__ provided by runtype.dataclass
             if k == "source_table":
                 # Skip data-sources, we're only interested in data-parameters
                 continue
