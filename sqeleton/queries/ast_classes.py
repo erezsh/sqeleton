@@ -17,6 +17,7 @@ from .base import SKIP, DbPath, args_as_tuple, SqeletonError
 class Root:
     "Nodes inheriting from Root can be used as root statements in SQL (e.g. SELECT yes, RANDOM() no)"
 
+
 class QueryBuilderError(SqeletonError):
     pass
 
@@ -43,7 +44,7 @@ class CompilableNode(Compilable):
 
     def _dfs_values(self):
         yield self
-        for k, vs in dict(self).items():  # __dict__ provided by runtype.dataclass
+        for k, vs in self.asdict().items():  # __dict__ provided by runtype.dataclass
             if k == "source_table":
                 # Skip data-sources, we're only interested in data-parameters
                 continue
@@ -67,8 +68,11 @@ Expr = Union[ExprNode, str, bytes, bool, int, float, datetime, ArithString, None
 
 @dataclass
 class Code(ExprNode, Root):
+    """Raw SQL code"""
+
     code: str
     args: Dict[str, Expr] = None
+
 
 def _expr_type(e: Expr) -> type:
     if isinstance(e, ExprNode):
@@ -78,6 +82,8 @@ def _expr_type(e: Expr) -> type:
 
 @dataclass
 class Alias(ExprNode):
+    """An alias of a column"""
+
     expr: Expr
     name: str
 
@@ -95,10 +101,12 @@ def _drop_skips_dict(exprs_dict):
 
 
 class ITable(AbstractTable):
+    """Interface for tabular objects, with focus on SQL operations"""
+
     source_table: Any
     schema: Schema = None
 
-    def select(self, *exprs: Expr, distinct: bool=SKIP, optimizer_hints=SKIP, **named_exprs) -> "Select":
+    def select(self, *exprs: Expr, distinct: bool = SKIP, optimizer_hints=SKIP, **named_exprs) -> "Select":
         """Create a new table with the specified fields"""
         exprs = args_as_tuple(exprs)
         exprs = _drop_skips(exprs)
@@ -108,6 +116,15 @@ class ITable(AbstractTable):
         return Select.make(self, columns=exprs, distinct=distinct, optimizer_hints=optimizer_hints)
 
     def where(self, *exprs) -> "Select":
+        """Create a filter for the table, using a WHERE clause.
+
+        Parameters:
+            exprs: A list of expressions to filter the table with. Uses of ``SKIP`` will be ignored.
+
+        Returns:
+            A new table expression with the filter applied.
+
+        """
         exprs = args_as_tuple(exprs)
         exprs = _drop_skips(exprs)
         if not exprs:
@@ -117,6 +134,15 @@ class ITable(AbstractTable):
         return Select.make(self, where_exprs=exprs)
 
     def order_by(self, *exprs):
+        """Order the table by the given expressions, using the ORDER BY clause.
+
+        Parameters:
+            exprs: A list of expressions to order by. Uses of ``SKIP`` will be ignored.
+
+        Returns:
+            A new table expression with the order applied.
+        """
+        exprs = args_as_tuple(exprs)
         exprs = _drop_skips(exprs)
         if not exprs:
             return self
@@ -125,20 +151,39 @@ class ITable(AbstractTable):
         return Select.make(self, order_by_exprs=exprs)
 
     def limit(self, limit: int):
+        """Limit the number of rows returned by the query, using the LIMIT clause.
+
+        Parameters:
+            limit: The maximum number of rows to return. ``SKIP`` will set no limit.
+        """
         if limit is SKIP:
             return self
 
         return Select.make(self, limit_expr=limit)
 
-    def join(self, target: "ITable"):
-        """Join this table with the target table."""
+    def join(self, target: "ITable") -> "Join":
+        """Join this table with the target table.
+
+        Parameters:
+            target: The table to join with.
+
+        Returns:
+            A new table expression representing the join.
+        """
         return Join([self, target])
 
     def group_by(self, *keys) -> "GroupBy":
-        """Group according to the given keys.
+        """Group according to the given keys, using the GROUP BY clause.
 
         Must be followed by a call to :ref:``GroupBy.agg()``
+
+        Parameters:
+            keys: A list of expressions to group by. Uses of ``SKIP`` will be ignored.
+
+        Returns:
+            A new table expression with the group-by applied.
         """
+        keys = args_as_tuple(keys)
         keys = _drop_skips(keys)
         resolve_names(self.source_table, keys)
 
@@ -162,27 +207,29 @@ class ITable(AbstractTable):
             raise TypeError(column)
         return self._get_column(column)
 
-    def count(self):
+    def count(self) -> "Select":
+        """SELECT COUNT(*) FROM self"""
         return Select(self, [Count()])
 
-    def union(self, other: "ITable"):
+    def union(self, other: "ITable") -> "TableOp":
         """SELECT * FROM self UNION other"""
         return TableOp("UNION", self, other)
 
-    def union_all(self, other: "ITable"):
+    def union_all(self, other: "ITable") -> "TableOp":
         """SELECT * FROM self UNION ALL other"""
         return TableOp("UNION ALL", self, other)
 
-    def minus(self, other: "ITable"):
+    def minus(self, other: "ITable") -> "TableOp":
         """SELECT * FROM self EXCEPT other"""
         # aka
         return TableOp("EXCEPT", self, other)
 
-    def intersect(self, other: "ITable"):
+    def intersect(self, other: "ITable") -> "TableOp":
         """SELECT * FROM self INTERSECT other"""
         return TableOp("INTERSECT", self, other)
 
-    def alias(self, name):
+    def alias(self, name: str) -> "TableAlias":
+        """Create an alias for the table. If there already is an alias, it will be replaced."""
         if isinstance(self, TableAlias):
             return self.replace(name=name)
         return TableAlias(self, name)
@@ -190,16 +237,23 @@ class ITable(AbstractTable):
 
 @dataclass
 class Concat(ExprNode):
+    """Concatenate expressions, with an optional seperator."""
+
     exprs: list
     sep: str = None
+
+    type = str
 
 
 @dataclass
 class Count(ExprNode):
+    """Count the number of rows in a table"""
+
     expr: Expr = None
     distinct: bool = False
 
     type = int
+
 
 class LazyOps:
     def __add__(self, other):
@@ -262,16 +316,27 @@ class LazyOps:
     def __and__(self, other):
         return BinBoolOp("AND", [self, other])
 
-    def is_distinct_from(self, other):
+    def is_distinct_from(self, other: Expr) -> ExprNode:
+        """Check if the expression is distinct from the other expression (i.e. not equal, treating NULL as a value)"""
         return IsDistinctFrom(self, other)
 
-    def like(self, other):
+    def like(self, other: Expr) -> ExprNode:
+        """Check if the expression is like the other expression, using SQL LIKE syntax"""
         return BinBoolOp("LIKE", [self, other])
 
-    def ilike(self, other):
+    def ilike(self, other: Expr) -> ExprNode:
+        """Check if the expression is like the other expression, case-insensitive, using SQL ILIKE syntax"""
         return BinBoolOp("ILIKE", [self, other])
 
-    def in_(self, *others):
+    def in_(self, *others: Expr) -> ExprNode:
+        """Check if the expression is in the list or table given
+
+        Parameters:
+            others: A list of constants, or a single table expression
+
+        Returns:
+            A new expression representing the 'IN' operation
+        """
         others = args_as_tuple(others)
         assert isinstance(others, tuple), f"Only lists of constants are supported for now, not {others}"
         if len(others) == 0:
@@ -280,31 +345,50 @@ class LazyOps:
             return InTable(self, others[0])
         return In(self, others)
 
-    def test_regex(self, other):
+    def test_regex(self, other: Expr) -> ExprNode:
+        """Check if the expression matches the regex pattern.
+
+        Parameters:
+            other: A string expression representing the regex pattern.
+
+        Returns:
+            A new expression representing the regex test.
+        """
         return TestRegex(self, other)
 
-    def sum(self):
+    def sum(self) -> ExprNode:
+        """Sum the values of the expression"""
         return Func("SUM", [self])
 
-    def count(self, distinct=False):
-        # return Func("COUNT", [self])
+    def count(self, distinct: bool = False):
+        """Count the number of rows in the expression
+
+        Parameters:
+            distinct (bool): If True, only count distinct rows.
+        """
         return Count(self, distinct=distinct)
 
     def max(self):
+        """Get the maximum value of the list expression"""
         return Func("MAX", [self])
 
     def min(self):
+        """Get the minimum value of the list expression"""
         return Func("MIN", [self])
 
 
 @dataclass
 class TestRegex(ExprNode, LazyOps):
+    """Check if the expression matches the regex pattern"""
+
     string: Expr
     pattern: Expr
 
 
 @dataclass
 class Func(ExprNode, LazyOps):
+    """Call a function with the given arguments"""
+
     name: str
     args: Sequence[Expr]
     ret_type: type = None
@@ -312,12 +396,16 @@ class Func(ExprNode, LazyOps):
 
 @dataclass
 class WhenThen(ExprNode):
+    """A 'when/then' clause in a case-when expression"""
+
     when: Expr
     then: Expr
 
 
 @dataclass
 class CaseWhen(ExprNode, LazyOps):
+    """A case-when expression"""
+
     cases: Sequence[WhenThen]
     else_expr: Expr = None
 
@@ -346,10 +434,16 @@ class CaseWhen(ExprNode, LazyOps):
             return QB_When(self, whens[0])
         return QB_When(self, BinBoolOp("AND", whens))
 
-    def else_(self, then: Expr):
+    def else_(self, then: Expr) -> "CaseWhen":
         """Add an 'else' clause to the case expression.
 
-        Can only be called once!
+        Can only be called once per case-when!
+
+        Parameters:
+            then: The expression to return if none of the 'when' clauses match.
+
+        Returns:
+            A new case-when expression with the 'else' clause added.
         """
         if self.else_expr is not None:
             raise QueryBuilderError(f"Else clause already specified in {self}")
@@ -371,12 +465,17 @@ class QB_When:
 
 @_dataclass(eq=False, order=False)
 class IsDistinctFrom(ExprNode, LazyOps):
+    """Check if two expressions are distinct from each other (i.e. not equal, treating NULL as a value)"""
+
     a: Expr
     b: Expr
     type = bool
 
+
 @_dataclass(eq=False, order=False)
 class BinOp(ExprNode, LazyOps):
+    """Binary operation on expressions"""
+
     op: str
     args: Sequence[Expr]
 
@@ -392,6 +491,8 @@ class BinOp(ExprNode, LazyOps):
 
 @dataclass
 class UnaryOp(ExprNode, LazyOps):
+    """Unary operation on an expression"""
+
     op: str
     expr: Expr
 
@@ -401,12 +502,16 @@ class UnaryOp(ExprNode, LazyOps):
 
 
 class BinBoolOp(BinOp):
+    """Binary boolean operation on expressions"""
+
     type = bool
 
 
 @_dataclass(eq=False, order=False)
 class Column(ExprNode, LazyOps):
-    source_table: ITable    # TODO: TablePath
+    """A column in a table"""
+
+    source_table: ITable  # TODO: TablePath
     name: str
 
     @property
@@ -415,12 +520,15 @@ class Column(ExprNode, LazyOps):
             raise QueryBuilderError(f"Schema required for table {self.source_table}")
         return self.source_table.schema[self.name]
 
+
 class ExprTable(ExprNode, ITable):
     pass
 
 
 @_dataclass
 class TablePath(ExprTable):
+    """A path to a table in a database"""
+
     path: DbPath
     schema: Optional[Schema] = field(default=None, repr=False)
 
@@ -457,7 +565,7 @@ class TablePath(ExprTable):
             source_table = source_table.select()
         return CreateTable(self, source_table, if_not_exists=if_not_exists, primary_keys=primary_keys)
 
-    def drop(self, if_exists=False):
+    def drop(self, if_exists: bool = False):
         """Returns a query expression to delete the table.
 
         Parameters:
@@ -469,7 +577,16 @@ class TablePath(ExprTable):
         """Returns a query expression to truncate the table. (remove all rows)"""
         return TruncateTable(self)
 
-    def delete_rows(self, *where_exprs: Union[Expr, Literal[SKIP]]):
+    def delete_rows(self, *where_exprs: Union[Expr, Literal[SKIP]]) -> "DeleteFromTable":
+        """Returns a query expression to delete rows from the table.
+
+        Parameters:
+            where_exprs: A list of expressions to filter the rows to delete. Uses of ``SKIP`` will be ignored.
+                         If no where expressions are provided, all rows will be deleted.
+
+        Returns:
+            A new query expression to delete rows from the table.
+        """
         where_exprs = args_as_tuple(where_exprs)
         where_exprs = _drop_skips(where_exprs)
         if not where_exprs:
@@ -478,7 +595,17 @@ class TablePath(ExprTable):
         resolve_names(self.source_table, where_exprs)
         return DeleteFromTable(self, where_exprs)
 
-    def update_fields(self, *where_exprs: Expr, **kv):
+    def update_fields(self, *where_exprs: Expr, **kv) -> "UpdateTable":
+        """Returns a query expression to update fields in the table.
+
+        Parameters:
+            where_exprs: A list of expressions to filter the rows to update. Uses of ``SKIP`` will be ignored.
+                         If no where expressions are provided, all rows will be updated.
+            kv: A dictionary of column names and values to update. The values can be expressions.
+
+            Returns:
+                A new query expression to update fields in the table.
+        """
         where_exprs = args_as_tuple(where_exprs)
         where_exprs = _drop_skips(where_exprs)
         resolve_names(self.source_table, where_exprs)
@@ -519,10 +646,11 @@ class TablePath(ExprTable):
         if values:
             if len(values) == 1 and isinstance(values[0], TableType):
                 assert columns is None
-                kw = {k:v.default if isinstance(v, Options) else v
-                      for k, v in values[0]
-                      if not (isinstance(v, Options) and v.auto)
-                      }
+                kw = {
+                    k: v.default if isinstance(v, Options) else v
+                    for k, v in values[0]
+                    if not (isinstance(v, Options) and v.auto)
+                }
             else:
                 return InsertToTable(self, ConstantTable([values]), columns=columns)
 
@@ -563,6 +691,8 @@ class TablePath(ExprTable):
 
 @_dataclass
 class ForeignKey:
+    """A foreign key constraint"""
+
     table: TablePath
     field: str
 
@@ -573,6 +703,8 @@ class ForeignKey:
 
 @dataclass
 class TableAlias(ExprTable):
+    """An alias for a table"""
+
     source_table: ITable
     name: str
 
@@ -580,12 +712,14 @@ class TableAlias(ExprTable):
     def schema(self):
         return self.source_table.schema
 
+
 @dataclass
 class Exists(ExprNode, LazyOps):
+    """Check if a subquery returns any rows"""
+
     expr: ITable
 
     type = bool
-
 
 
 SelectColumns = Sequence[Union[Expr, ellipsis]]
@@ -609,6 +743,8 @@ def _union_dicts(*ds):
 
 @dataclass
 class Join(ExprNode, ITable, Root):
+    """A join operation between two tables"""
+
     source_tables: Sequence[ITable]
     op: str = None
     on_exprs: Sequence[Expr] = None
@@ -642,10 +778,7 @@ class Join(ExprNode, ITable, Root):
         if not exprs:
             return self
 
-        exprs = [BinBoolOp('=', [t[e] for t in self.source_tables])
-                 if isinstance(e, str)
-                 else e
-                 for e in exprs]
+        exprs = [BinBoolOp("=", [t[e] for t in self.source_tables]) if isinstance(e, str) else e for e in exprs]
 
         return self.replace(on_exprs=(self.on_exprs or []) + exprs)
 
@@ -669,8 +802,11 @@ class Join(ExprNode, ITable, Root):
         # TODO Ensure exprs <= self.columns ?
         return self.replace(columns=exprs)
 
+
 @dataclass
 class GroupBy(ExprNode, ITable, Root):
+    """A group-by operation using the GROUP BY clause"""
+
     table: ITable
     keys_: Sequence[Expr] = None  # IKey?
     values_: Sequence[Expr] = None
@@ -691,8 +827,15 @@ class GroupBy(ExprNode, ITable, Root):
     def __post_init__(self):
         assert self.keys_ or self.values_
 
-    def having(self, *exprs):
-        """Add a 'HAVING' clause to the group-by"""
+    def having(self, *exprs) -> "GroupBy":
+        """Add a 'HAVING' clause to the group-by
+
+        Parameters:
+            exprs: A list of expressions to filter the groups. Uses of ``SKIP`` will be ignored.
+
+        Returns:
+            A new group-by expression with the filter applied.
+        """
         exprs = args_as_tuple(exprs)
         exprs = _drop_skips(exprs)
         if not exprs:
@@ -701,8 +844,16 @@ class GroupBy(ExprNode, ITable, Root):
         resolve_names(self.table, exprs)
         return self.replace(having_exprs=(self.having_exprs or []) + exprs)
 
-    def agg(self, *exprs, **named_exprs):
-        """Select aggregated fields for the group-by."""
+    def agg(self, *exprs, **named_exprs) -> "GroupBy":
+        """Select aggregated fields for the group-by.
+
+        Parameters:
+            exprs: A list of expressions to aggregate. Uses of ``SKIP`` will be ignored.
+            named_exprs: A dictionary of named expressions to aggregate. Uses of ``SKIP`` will be ignored.
+
+        Returns:
+            A new group-by expression with the aggregated fields applied.
+        """
         exprs = args_as_tuple(exprs)
         exprs = _drop_skips(exprs)
 
@@ -715,6 +866,8 @@ class GroupBy(ExprNode, ITable, Root):
 
 @dataclass
 class TableOp(ExprNode, ITable, Root):
+    """A binary operation between two tables"""
+
     op: str
     table1: ITable
     table2: ITable
@@ -735,13 +888,18 @@ class TableOp(ExprNode, ITable, Root):
         assert len(s1) == len(s2)
         return s1
 
+
 @dataclass
 class Desc(ExprNode):
+    """A descending order"""
+
     expr: ExprNode
 
 
 @dataclass
 class Select(ExprTable, Root):
+    """A SELECT statement"""
+
     table: Expr = None
     columns: SelectColumns = None
     where_exprs: Sequence[Expr] = None
@@ -765,7 +923,6 @@ class Select(ExprTable, Root):
     def source_table(self):
         return self
 
-
     @classmethod
     def make(cls, table: ITable, distinct: bool = SKIP, optimizer_hints: str = SKIP, **kwargs):
         assert "table" not in kwargs
@@ -778,8 +935,8 @@ class Select(ExprTable, Root):
         # If table is not a select, return a new Select instance
         if not isinstance(table, cls):
             return cls(table, **kwargs)
-        
-        if 'columns' in kwargs and table.columns is not None:
+
+        if "columns" in kwargs and table.columns is not None:
             return cls(table, **kwargs)
 
         # We can safely assume isinstance(table, Select)
@@ -807,10 +964,11 @@ class Select(ExprTable, Root):
 
 @dataclass
 class Cte(ExprNode, ITable):
+    """A common table expression (i.e. shared subquery)"""
+
     source_table: Expr
     name: str = None
     params: Sequence[str] = None
-
 
     @property
     def schema(self):
@@ -866,11 +1024,10 @@ class _ResolveColumn(ExprNode, LazyOps):
         return LazyOps.__rsub__(self, other)
 
 
-
-
-
 @dataclass
 class Wildcard:
+    """Wildcard for selecting all columns"""
+
     exclude: List[str]
 
 
@@ -884,10 +1041,9 @@ class This:
         return _ResolveColumn(name)
 
     @overload
-    def __getitem__(self, name: str) -> 'This': ...
+    def __getitem__(self, name: str) -> "This": ...
     @overload
-    def __getitem__(self, name: (list, tuple)) -> List['This']:
-        ...
+    def __getitem__(self, name: (list, tuple)) -> List["This"]: ...
 
     def __getitem__(self, name):
         if isinstance(name, (list, tuple)):
@@ -897,6 +1053,8 @@ class This:
 
 @dataclass
 class In(ExprNode):
+    """Check if an expression is in a list of values"""
+
     expr: Expr
     list: Sequence[Expr]
 
@@ -905,31 +1063,40 @@ class In(ExprNode):
 
 @dataclass
 class InTable(ExprNode):
+    """Check if an expression is in a table"""
+
     expr: Expr
     source_table: ExprTable
 
     type = bool
 
 
-
 @dataclass
 class Cast(ExprNode):
+    """Cast an expression to a different type"""
+
     expr: Expr
     target_type: Expr
 
 
 @dataclass
 class Random(ExprNode, LazyOps):
+    """A random number"""
+
     type = float
 
 
 @dataclass
 class ConstantTable(ExprNode):
+    """A table of constant values"""
+
     rows: Sequence[Sequence]
 
 
 @dataclass
 class Explain(ExprNode, Root):
+    """An EXPLAIN statement"""
+
     select: Select
 
     type = str
@@ -937,16 +1104,21 @@ class Explain(ExprNode, Root):
 
 @dataclass
 class CurrentTimestamp(ExprNode, LazyOps):
+    """The current timestamp"""
+
     type = datetime
 
 
 @dataclass
 class TimeTravel(ITable):
+    """A time-travel operation"""
+
     table: TablePath
     before: bool = False
     timestamp: datetime = None
     offset: int = None
     statement: str = None
+
 
 # DDL
 
@@ -957,6 +1129,8 @@ class Statement(CompilableNode, Root):
 
 @dataclass
 class CreateTable(Statement):
+    """a CREATE TABLE statement"""
+
     path: TablePath
     source_table: Expr = None
     if_not_exists: bool = False
@@ -965,12 +1139,16 @@ class CreateTable(Statement):
 
 @dataclass
 class DropTable(Statement):
+    """a DROP TABLE statement"""
+
     path: TablePath
     if_exists: bool = False
 
 
 @dataclass
 class TruncateTable(Statement):
+    """a TRUNCATE TABLE statement"""
+
     path: TablePath
 
 
@@ -1000,10 +1178,10 @@ class Statement_MaybeReturning(Statement):
         return self.replace(returning_exprs=exprs)
 
 
-
-
 @dataclass
 class DeleteFromTable(Statement_MaybeReturning):
+    """a DELETE FROM statement"""
+
     path: TablePath
     where_exprs: Sequence[Expr] = None
     returning_exprs: SelectColumns = None
@@ -1011,13 +1189,18 @@ class DeleteFromTable(Statement_MaybeReturning):
 
 @dataclass
 class UpdateTable(Statement_MaybeReturning):
+    """an UPDATE statement"""
+
     path: TablePath
     updates: Dict[str, Expr]
     where_exprs: Sequence[Expr] = None
     returning_exprs: SelectColumns = None
 
+
 @dataclass
 class InsertToTable(Statement_MaybeReturning):
+    """an INSERT INTO statement"""
+
     path: TablePath
     expr: Expr
     columns: List[str] = None
