@@ -102,6 +102,7 @@ class Mixin_NormalizeValue(AbstractMixin_NormalizeValue):
 class Dialect(BaseDialect):
     name = "Clickhouse"
     ROUNDS_ON_PREC_LOSS = False
+    ARG_SYMBOL = None       # TODO Clickhouse only supports named parameters, not positional
     TYPE_CLASSES = {
         "Int8": Integer,
         "Int16": Integer,

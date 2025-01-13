@@ -565,7 +565,7 @@ class Database(AbstractDatabase[T]):
         assert isinstance(sql_code, CompiledCode), sql_code
         try:
             logger.debug(f"{self.name} Executing SQL: {sql_code.code} || {sql_code.args}")
-            c.execute(sql_code.code, sql_code.args)
+            c.execute(sql_code.code, sql_code.args or None)
             # insert, delete and update may return values if they have the "returning" clause.
             if sql_code.type is not None or sql_code.code.lstrip().lower().startswith(
                 ("select", "explain", "show", "with")
