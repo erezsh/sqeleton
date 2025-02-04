@@ -22,6 +22,7 @@ TEST_DATABASES = {
     dbs.Presto,
     dbs.Trino,
     dbs.Vertica,
+    dbs.MsSQL,
 }
 
 test_each_database: Callable = make_test_each_database_in_list(TEST_DATABASES)

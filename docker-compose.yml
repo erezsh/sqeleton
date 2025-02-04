@@ -117,13 +117,28 @@ services:
       networks:
       - local
 
-
+    mssql:
+      container_name: dd-mssql
+      image: mcr.microsoft.com/mssql/server:2022-latest
+      restart: always
+      volumes:
+        - mssql-data:/var/opt/mssql/data:delegated
+      ports:
+        - '8001:1433'
+      expose:
+        - '8001'
+      env_file:
+        - dev/dev.env
+      tty: true
+      networks:
+        - local
 
 volumes:
   postgresql-data:
   mysql-data:
   clickhouse-data:
   vertica-data:
+  mssql-data:
 
 networks:
   local:

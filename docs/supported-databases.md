@@ -14,6 +14,7 @@
 | Clickhouse    |  💛    | `clickhouse://<username>:<password>@<hostname>:9000/<database>`                                                                     |
 | Vertica       |  💛    | `vertica://<username>:<password>@<hostname>:5433/<database>`                                                                        |
 | DuckDB        |  💛    |                                                                                                                                     |
+| MsSQL         |  ⏳    | `mssql+pymssql://<user>:<password>@<host>:<port>/<database>`                                                                        |
 | ElasticSearch |  📝    |                                                                                                                                     |
 | Planetscale   |  📝    |                                                                                                                                     |
 | Pinot         |  📝    |                                                                                                                                     |
