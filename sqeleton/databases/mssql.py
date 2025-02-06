@@ -17,7 +17,7 @@ from typing import Dict
 from ..abcs.mixins import AbstractMixin_MD5, AbstractMixin_NormalizeValue, AbstractMixin_Schema
 from .base import BaseDialect, ThreadedDatabase, import_helper, ConnectError, Mixin_Schema
 from ..abcs import Compilable
-from ..queries import this, table, Select
+from ..queries import this, table, Select, SKIP
 from ..queries.ast_classes import TablePath
 from .base import TIMESTAMP_PRECISION_POS, Mixin_RandomSample, QueryError
 
@@ -53,27 +53,15 @@ class Mixin_Schema(AbstractMixin_Schema):
         return table("information_schema", "tables")
 
     def list_tables(self, table_schema: str, like: Compilable = None) -> Select:
-        if table_schema == None:
-            query = (
+        return (
                 self.table_information()
                 .where(
+                    this.table_schema == table_schema if table_schema is not None else SKIP,
                     this.table_name.like(like) if like is not None else SKIP,
                     this.table_type == "BASE TABLE",
                 )
                 .select(this.table_name)
             )
-        else:
-            query = (
-                self.table_information()
-                .where(
-                    this.table_schema == table_schema,
-                    this.table_name.like(like) if like is not None else SKIP,
-                    this.table_type == "BASE TABLE",
-                )
-                .select(this.table_name)
-            )
-
-        return query
 
 
 class MsSQLDialect(BaseDialect, Mixin_Schema):
@@ -135,9 +123,10 @@ class MsSQLDialect(BaseDialect, Mixin_Schema):
         return f"CONCAT({joined_exprs})"
 
     def _convert_db_precision_to_digits(self, p: int) -> int:
-        # Subtracting 2 due to wierd precision issues in PostgreSQL
         return super()._convert_db_precision_to_digits(p) - 2
 
+    # Datetime is stored as UTC by default in MsSQL
+    # There is no current way to enforce a timezone for a session
     def set_timezone_to_utc(self) -> str:
         return ""
 
@@ -153,7 +142,7 @@ class MsSQLDialect(BaseDialect, Mixin_Schema):
                 bool: "BIT",
                 datetime: "datetime2",
             }[t]
-        except:
+        except KeyError:
             return super().type_repr(t)
     
 class MsSQL(ThreadedDatabase):
