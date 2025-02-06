@@ -17,7 +17,7 @@ from typing import Dict
 from ..abcs.mixins import AbstractMixin_MD5, AbstractMixin_NormalizeValue, AbstractMixin_Schema
 from .base import BaseDialect, ThreadedDatabase, import_helper, ConnectError, Mixin_Schema
 from ..abcs import Compilable
-from ..queries import this, table, SKIP, Select
+from ..queries import this, table, Select
 from ..queries.ast_classes import TablePath
 from .base import TIMESTAMP_PRECISION_POS, Mixin_RandomSample, QueryError
 
