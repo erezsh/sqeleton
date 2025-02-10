@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "sqeleton"
-version = "0.1.8"
+version = "0.1.7"
 description = "Python library for querying SQL databases"
 authors = ["Erez Shinan <erezshin@gmail.com>"]
 license = "MIT"
@@ -23,7 +23,7 @@ packages = [{ include = "sqeleton" }]
 
 [tool.poetry.dependencies]
 python = "^3.8"
-runtype = "0.5.0"
+runtype = ">=0.5.0"
 dsnparse = "*"
 click = ">=8.1"
 rich = "*"

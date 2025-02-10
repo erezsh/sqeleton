@@ -18,8 +18,8 @@ from ..abcs.mixins import AbstractMixin_MD5, AbstractMixin_NormalizeValue, Abstr
 from .base import BaseDialect, ThreadedDatabase, import_helper, ConnectError, Mixin_Schema
 from ..abcs import Compilable
 from ..queries import this, table, Select, SKIP
-from ..queries.ast_classes import TablePath
-from .base import TIMESTAMP_PRECISION_POS, Mixin_RandomSample, QueryError
+from ..queries.ast_classes import ForeignKey, TablePath
+from .base import TIMESTAMP_PRECISION_POS, Mixin_RandomSample
 
 SESSION_TIME_ZONE = None  # Changed by the tests
 
@@ -136,14 +136,19 @@ class MsSQLDialect(BaseDialect, Mixin_Schema):
     def type_repr(self, t) -> str:
         if isinstance(t, TimestampTZ):
             return f"datetimeoffset"
-        try:
-            return {
-                str: "VARCHAR(1024)",
-                bool: "BIT",
-                datetime: "datetime2",
-            }[t]
-        except KeyError:
-            return super().type_repr(t)
+        elif isinstance(t, ForeignKey):
+            return self.type_repr(t.type)
+        elif isinstance(t, type):
+            try:
+                return {
+                    str: "NVARCHAR(MAX)",
+                    bool: "BIT",
+                    datetime: "datetime2",
+                }[t]
+            except KeyError:
+                return super().type_repr(t)
+
+        super().type_repr(t)
     
 class MsSQL(ThreadedDatabase):
     "AKA sql-server"
@@ -165,14 +170,6 @@ class MsSQL(ThreadedDatabase):
             return self.mssql.connect(**self._args)
         except self.mssql.Error as e:
             raise ConnectError(*e.args) from e
-
-    def _query_cursor(self, c, sql_code: str):
-        try:
-            return super()._query_cursor(c, sql_code)
-        except self.mssql.DatabaseError as e:
-            raise QueryError(e)
-        except e:
-            raise Exception(e)
     
     def select_table_schema(self, path: DbPath) -> str:
         """Provide SQL for selecting the table schema as (name, type, date_prec, num_prec)"""
