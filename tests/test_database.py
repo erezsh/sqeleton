@@ -164,13 +164,13 @@ class TestQueries(unittest.TestCase):
 @test_each_database
 class TestThreePartIds(unittest.TestCase):
     def test_three_part_support(self):
-        if self.db_cls not in [dbs.PostgreSQL, dbs.Redshift, dbs.Snowflake, dbs.DuckDB]:
+        if self.db_cls not in [dbs.PostgreSQL, dbs.Redshift, dbs.Snowflake, dbs.DuckDB, dbs.MsSQL]:
             self.skipTest("Limited support for 3 part ids")
 
         table_name = "tbl_" + random_table_suffix()
         db = get_conn(self.db_cls)
-        db_res = db.query("SELECT CURRENT_DATABASE()")
-        schema_res = db.query("SELECT CURRENT_SCHEMA()")
+        db_res = db.query("SELECT CURRENT_DATABASE()") if self.db_cls != dbs.MsSQL else db.query("SELECT DB_NAME() AS [Current Database]")
+        schema_res = db.query("SELECT CURRENT_SCHEMA()") if self.db_cls != dbs.MsSQL else db.query("SELECT SCHEMA_NAME()")
         db_name = db_res.rows[0][0]
         schema_name = schema_res.rows[0][0]
 
