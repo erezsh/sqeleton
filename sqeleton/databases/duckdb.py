@@ -164,7 +164,8 @@ class DuckDB(Database):
     def create_connection(self):
         ddb = import_duckdb()
         try:
-            return ddb.connect(self._args["filepath"])
+            ddb_config = {key: value for key, value in self._args.items() if key not in ["driver", "filepath"]}
+            return ddb.connect(self._args["filepath"],config=ddb_config)
         except ddb.OperationalError as e:
             raise ConnectError(*e.args) from e
 
