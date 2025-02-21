@@ -33,7 +33,7 @@ TEST_CLICKHOUSE_CONN_STRING: str = os.environ.get("CLICKHOUSE_URI")
 # vertica uri provided for docker - "vertica://vertica:Password1@localhost:5433/vertica"
 TEST_VERTICA_CONN_STRING: str = os.environ.get("VERTICA_URI")
 TEST_DUCKDB_CONN_STRING: str = "duckdb://main:@:memory:"
-TEST_MSSQL_CONN_STRING: str = "pymssql://sa:<password!CAP>@localhost:8001/master"
+TEST_MSSQL_CONN_STRING: str = "pymssql://sa:<password!CAP>@localhost:8020/master"
 
 
 DEFAULT_N_SAMPLES = 50

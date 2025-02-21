@@ -124,9 +124,9 @@ services:
       volumes:
         - mssql-data:/var/opt/mssql/data:delegated
       ports:
-        - '8001:1433'
+        - '8020:1433'
       expose:
-        - '8001'
+        - 8020
       env_file:
         - dev/dev.env
       tty: true
