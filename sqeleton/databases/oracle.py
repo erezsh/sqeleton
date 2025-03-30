@@ -171,7 +171,12 @@ class Oracle(ThreadedDatabase):
     CONNECT_URI_PARAMS = ["database?"]
 
     def __init__(self, *, host, database, thread_count, **kw):
-        self.kwargs = dict(dsn=f"{host}/{database}" if database else host, **kw)
+
+        self.kwargs = kw
+
+        # Build dsn if not present
+        if "dsn" not in kw:
+            self.kwargs["dsn"] = f"{host}/{database}" if database else host
 
         self.default_schema = kw.get("user").upper()
 
