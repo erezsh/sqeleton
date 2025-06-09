@@ -9,7 +9,7 @@ from sqeleton import databases as dbs
 from sqeleton.queries import table, current_timestamp, NormalizeAsString, ForeignKey, Compiler
 from .common import TEST_MYSQL_CONN_STRING
 from .common import str_to_checksum, make_test_each_database_in_list, get_conn, random_table_suffix
-from sqeleton.abcs.database_types import TimestampTZ
+from sqeleton.abcs.database_types import TimestampTZ, Boolean, IKey
 
 TEST_DATABASES = {
     dbs.MySQL,
@@ -95,7 +95,31 @@ class TestSchema(unittest.TestCase):
         db.query(tbl.drop())
         assert not db.query(q)
 
-
+@test_each_database
+class TestColTypes(unittest.TestCase):
+    """Test column type implementations, especially IKey interface"""
+    
+    def test_boolean_as_ikey(self):
+        """Test that Boolean type implements IKey interface correctly"""
+        boolean_type = Boolean()
+        
+        # Test that Boolean is an instance of IKey
+        self.assertIsInstance(boolean_type, IKey)
+        
+        # Test that python_type property returns bool
+        self.assertEqual(boolean_type.python_type, bool)
+        
+        # Test precision is 0
+        self.assertEqual(boolean_type.precision, 0)
+        
+        # Test make_value method converts values to bool
+        self.assertEqual(boolean_type.make_value(True), True)
+        self.assertEqual(boolean_type.make_value(False), False)
+        self.assertEqual(boolean_type.make_value(1), True)
+        self.assertEqual(boolean_type.make_value(0), False)
+        self.assertEqual(boolean_type.make_value("True"), True)
+        self.assertEqual(boolean_type.make_value(""), False)
+        
 @test_each_database
 class TestQueries(unittest.TestCase):
     def test_current_timestamp(self):

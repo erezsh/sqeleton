@@ -24,10 +24,6 @@ class PrecisionType(ColType):
     rounds: Union[bool, Unknown] = Unknown
 
 
-class Boolean(ColType):
-    precision = 0
-
-
 class TemporalType(PrecisionType):
     pass
 
@@ -81,6 +77,10 @@ class Decimal(FractionalType, IKey):  # Snowflake may use Decimal as a key
             return int
         return decimal.Decimal
 
+
+class Boolean(ColType, IKey):
+    precision = 0
+    python_type = bool
 
 @dataclass
 class StringType(ColType):
