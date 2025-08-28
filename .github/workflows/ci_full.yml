@@ -1,11 +1,12 @@
 name: CI-COVER-DATABASES
 
 on:
-#   push:
+#  push:
 #     paths:
 #       - '**.py'
 #       - '.github/workflows/**'
 #       - '!dev/**'
+#       - '**.lock'
   pull_request:
     branches: [ master ]
   workflow_dispatch:
@@ -30,7 +31,8 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Build the stack
-        run: docker compose up -d mysql postgres trino clickhouse vertica
+        # The vertica docker image is 404
+        run: docker compose up -d mysql postgres trino clickhouse dremio #vertica
 
       - name: Install Poetry
         run: pip install poetry
@@ -43,9 +45,11 @@ jobs:
             # PRESTO_URI: 'presto://presto@127.0.0.1/postgresql/public'
             TRINO_URI: 'trino://postgres@127.0.0.1:8081/postgresql/public'
             CLICKHOUSE_URI: 'clickhouse://clickhouse:Password1@localhost:9000/clickhouse'
-            VERTICA_URI: 'vertica://vertica:Password1@localhost:5433/vertica'
+            # The vertica docker image is 404
+            #VERTICA_URI: 'vertica://vertica:Password1@localhost:5433/vertica'
             SNOWFLAKE_URI: '${{ secrets.SNOWFLAKE_URI }}'
             REDSHIFT_URI: '${{ secrets.REDSHIFT_URI }}'
+            DREMIO_URI: 'dremio://dremio:dremio123@localhost:32010/$scratch?UseEncryption=false'
         run: |
           chmod +x tests/waiting_for_stack_up.sh
           ./tests/waiting_for_stack_up.sh && poetry run unittest-parallel -j 16
