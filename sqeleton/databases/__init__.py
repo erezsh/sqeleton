@@ -14,5 +14,6 @@ from .trino import Trino
 from .clickhouse import Clickhouse
 from .vertica import Vertica
 from .duckdb import DuckDB
+from .dremio import Dremio
 
 connect = Connect()

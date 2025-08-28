@@ -99,31 +99,52 @@ services:
         networks:
             - local
 
-    vertica:
-      container_name: dd-vertica
-      image: vertica/vertica-ce:12.0.0-0
-      restart: always
-      volumes:
-          - vertica-data:/data:delegated
-      ports:
-        - '5433:5433'
-        - '5444:5444'
-      expose:
-        - '5433'
-        - '5444'
-      env_file:
-        - dev/dev.env
-      tty: true
-      networks:
-      - local
+# The vertica docker image is 404
+#    vertica:
+#      container_name: dd-vertica
+#      image: vertica/vertica-ce:12.0.0-0
+#      restart: always
+#      volumes:
+#          - vertica-data:/data:delegated
+#      ports:
+#        - '5433:5433'
+#        - '5444:5444'
+#      expose:
+#        - '5433'
+#        - '5444'
+#      env_file:
+#        - dev/dev.env
+#      tty: true
+#      networks:
+#      - local
 
-
+    dremio:
+        container_name: dd-dremio
+        image: dremio/dremio-oss:latest
+        restart: always
+        ports:
+          - '9047:9047'
+          - '31010:31010'
+          - '32010:32010'
+        expose:
+          - '9047'
+          - '31010'
+          - '32010'
+        networks:
+            - local
+        tty: true
+        env_file:
+          - dev/dev.env
+        volumes:
+          - dremio-data:/var/lib/dremio:delegated
 
 volumes:
   postgresql-data:
   mysql-data:
   clickhouse-data:
-  vertica-data:
+  # The vertica docker image is 404
+  #vertica-data:
+  dremio-data:
 
 networks:
   local:

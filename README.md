@@ -42,6 +42,7 @@ _Databases we fully support_:
 - Vertica
 - DuckDB >=0.6
 - SQLite (coming soon)
+- Dremio
 
 💻 **Built-in SQL client**: Connect to any of the supported databases with just one line.
 

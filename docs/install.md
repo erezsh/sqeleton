@@ -26,6 +26,8 @@ To ensure that the database drivers are compatible with sqeleton, we recommend i
 
 - `pip install 'sqeleton[vertica]'`
 
+- `pip install 'sqeleton[dremio]'`
+
 - For BigQuery, see: https://pypi.org/project/google-cloud-bigquery/
 
 _Some drivers have dependencies that cannot be installed using `pip` and still need to be installed manually._

@@ -22,6 +22,7 @@ TEST_DATABASES = {
     dbs.Presto,
     dbs.Trino,
     dbs.Vertica,
+    dbs.Dremio,
 }
 
 test_each_database: Callable = make_test_each_database_in_list(TEST_DATABASES)
@@ -104,6 +105,8 @@ class TestQueries(unittest.TestCase):
         assert isinstance(res, datetime), (res, type(res))
 
     def test_correct_timezone(self):
+        if self.db_cls in [dbs.Dremio]:
+            self.skipTest("No support for timezones.")
         name = "tbl_" + random_table_suffix()
         db = get_conn(self.db_cls)
         tbl = table(name, schema={"id": int, "created_at": TimestampTZ(9), "updated_at": TimestampTZ(9)})
