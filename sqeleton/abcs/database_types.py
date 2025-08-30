@@ -126,9 +126,7 @@ class String_FixedAlphanum(String_Alphanum):
 
     def make_value(self, value):
         if len(value) != self.length:
-            raise ValueError(
-                f"Expected alphanumeric value of length {self.length}, but got '{value}'."
-            )
+            raise ValueError(f"Expected alphanumeric value of length {self.length}, but got '{value}'.")
         return self.python_type(value, max_len=self.length)
 
 

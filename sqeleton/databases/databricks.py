@@ -178,7 +178,9 @@ class Databricks(ThreadedDatabase):
         self._refine_coltypes(path, col_dict, where)
         return col_dict
 
-    def process_query_table_schema(self, path: DbPath, raw_schema: Dict[str, Tuple], refine: bool = True, refine_where: Optional[str] = None) -> Tuple[Dict[str, ColType], Optional[list]]:
+    def process_query_table_schema(
+        self, path: DbPath, raw_schema: Dict[str, Tuple], refine: bool = True, refine_where: Optional[str] = None
+    ) -> Tuple[Dict[str, ColType], Optional[list]]:
         if not refine:
             raise NotImplementedError()
         return self._process_table_schema(path, raw_schema, list(raw_schema), refine_where), None

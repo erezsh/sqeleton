@@ -56,7 +56,7 @@ class BoundTable(BoundNode):  # ITable
         table_path = self.node.replace(schema=schema)
         return self.replace(node=table_path)
 
-    def query_schema(self, *, refine: bool = True, refine_where = None, case_sensitive=True):
+    def query_schema(self, *, refine: bool = True, refine_where=None, case_sensitive=True):
         table_path = self.node
 
         if table_path.schema:
@@ -77,5 +77,6 @@ def bound_table(database: AbstractDatabase, table_path: Union[TablePath, str, tu
 
 
 if TYPE_CHECKING:
+
     class BoundTable(BoundTable, TablePath):
         pass

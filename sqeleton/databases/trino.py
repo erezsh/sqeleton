@@ -23,7 +23,9 @@ class Mixin_NormalizeValue(presto.Mixin_NormalizeValue):
         else:
             s = f"date_format(cast({value} as timestamp(6)), '%Y-%m-%d %H:%i:%S.%f')"
 
-        return f"RPAD(RPAD({s}, {TIMESTAMP_PRECISION_POS + coltype.precision}, '.'), {TIMESTAMP_PRECISION_POS + 6}, '0')"
+        return (
+            f"RPAD(RPAD({s}, {TIMESTAMP_PRECISION_POS + coltype.precision}, '.'), {TIMESTAMP_PRECISION_POS + 6}, '0')"
+        )
 
     def normalize_uuid(self, value: str, coltype: ColType_UUID) -> str:
         if isinstance(coltype, String_UUID):
@@ -55,16 +57,13 @@ class Trino(presto.Presto):
             self.default_schema = kw.get("schema")
 
         if kw.get("password"):
-            kw["auth"] = trino.auth.BasicAuthentication(
-                kw.pop("user"), kw.pop("password")
-            )
+            kw["auth"] = trino.auth.BasicAuthentication(kw.pop("user"), kw.pop("password"))
             kw["http_scheme"] = "https"
 
         cert = kw.pop("cert", None)
         self._conn = trino.dbapi.connect(**kw)
         if cert is not None:
             self._conn._http_session.verify = cert
-
 
     @property
     def is_autocommit(self) -> bool:
