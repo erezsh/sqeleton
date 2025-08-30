@@ -331,16 +331,13 @@ class Database(AbstractDatabase[T]):
     #     logger.setLevel(level)
 
     @overload
-    def query(self, query_input: QueryInput) -> Any:
-        ...
+    def query(self, query_input: QueryInput) -> Any: ...
 
     @overload
-    def query(self, query_input: QueryInput, res_type: None) -> Any:
-        ...
+    def query(self, query_input: QueryInput, res_type: None) -> Any: ...
 
     @overload
-    def query(self, query_input: QueryInput, res_type: Type[TRes]) -> TRes:
-        ...
+    def query(self, query_input: QueryInput, res_type: Type[TRes]) -> TRes: ...
 
     def query(self, query_input, res_type=None):
         """Query the given SQL code/AST, and attempt to convert the result to type 'res_type'

@@ -10,6 +10,7 @@ logger = logging.getLogger("schema")
 
 Schema = CaseAwareMapping
 
+
 class TableType:
     pass
     # TODO: This should replace the current Schema type
@@ -21,6 +22,7 @@ class TableType:
 
 SchemaInput = Union[Type[TableType], Schema, dict]
 
+
 @dataclass
 class Options:
     default: Any = None
@@ -29,10 +31,12 @@ class Options:
     # TODO: foreign_key, unique
     # TODO: index?
 
+
 @dataclass
 class _Field:
     type: type
     options: Options
+
 
 class _Schema(CaseAwareMapping[Union[type, _Field]]):
     pass
@@ -41,6 +45,7 @@ class _Schema(CaseAwareMapping[Union[type, _Field]]):
     def make(cls, schema: SchemaInput):
         assert schema
         if TableType.is_superclass(schema):
+
             def _make_field(k: str, v: type):
                 field = getattr(schema, k)
                 if field:
@@ -49,7 +54,7 @@ class _Schema(CaseAwareMapping[Union[type, _Field]]):
                     return _Field(v, field)
                 return v
 
-            schema = CaseSensitiveDict({k:_make_field(k, v) for k,v in schema.__annotations__.items()})
+            schema = CaseSensitiveDict({k: _make_field(k, v) for k, v in schema.__annotations__.items()})
 
         elif isinstance(schema, CaseAwareMapping):
             pass
@@ -59,7 +64,8 @@ class _Schema(CaseAwareMapping[Union[type, _Field]]):
 
         return schema
 
-def options(**kw) -> Any:   # Any, so that type-checking doesn't complain
+
+def options(**kw) -> Any:  # Any, so that type-checking doesn't complain
     return Options(**kw)
 
 

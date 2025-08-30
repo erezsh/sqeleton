@@ -23,7 +23,17 @@ from ..abcs.database_types import (
     Native_UUID,
 )
 from ..abcs.mixins import AbstractMixin_MD5, AbstractMixin_NormalizeValue
-from .base import BaseDialect, Database, QueryResult, import_helper, ThreadLocalInterpreter, Mixin_Schema, Mixin_RandomSample, SqlCode, logger
+from .base import (
+    BaseDialect,
+    Database,
+    QueryResult,
+    import_helper,
+    ThreadLocalInterpreter,
+    Mixin_Schema,
+    Mixin_RandomSample,
+    SqlCode,
+    logger,
+)
 from .base import (
     MD5_HEXDIGITS,
     CHECKSUM_HEXDIGITS,
@@ -76,7 +86,7 @@ class Mixin_NormalizeValue(AbstractMixin_NormalizeValue):
 class Dialect(BaseDialect, Mixin_Schema):
     name = "Presto"
     ROUNDS_ON_PREC_LOSS = True
-    ARG_SYMBOL = None   # Not implemented by Presto
+    ARG_SYMBOL = None  # Not implemented by Presto
     TYPE_CLASSES = {
         # Timestamps
         "timestamp with time zone": TimestampTZ,
@@ -186,7 +196,7 @@ class Presto(Database):
         if isinstance(sql_code, ThreadLocalInterpreter):
             return sql_code.apply_queries(partial(query_cursor, c))
         elif isinstance(sql_code, str):
-            sql_code = CompiledCode(sql_code, [], None) # Unknown type. #TODO: Should we guess?
+            sql_code = CompiledCode(sql_code, [], None)  # Unknown type. #TODO: Should we guess?
 
         return query_cursor(c, sql_code)
 

@@ -9,8 +9,6 @@ from .compiler import Compiler, md
 from .ast_classes import Expr, ExprNode, Concat, Code
 
 
-
-
 @dataclass
 class NormalizeAsString(ExprNode):
     expr: ExprNode
@@ -35,7 +33,6 @@ class Compiler(Compiler):
         expr = c.compile(n.expr)
         return c.dialect.normalize_value_by_type(expr, n.expr_type or n.expr.type)
 
-
     @md
     def compile_node(c: Compiler, n: ApplyFuncAndNormalizeAsString) -> str:
         expr = n.expr
@@ -55,7 +52,6 @@ class Compiler(Compiler):
             expr = NormalizeAsString(expr, expr_type)
 
         return c.compile(expr)
-
 
     @md
     def compile_node(c: Compiler, n: Checksum) -> str:
