@@ -1,3 +1,4 @@
+from math import isnan
 from typing import Optional, Union
 
 from sqeleton.queries import this, SKIP
@@ -119,7 +120,6 @@ class Dialect(BaseDialect, Mixin_Schema):
 
     @staticmethod
     def nan_to_none(value: Optional[object]) -> Optional[int]:
-        from math import isnan
         if value is not None and not isinstance(value, int):
             return None if isnan(value) else int(value)
         else:
