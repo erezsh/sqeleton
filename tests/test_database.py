@@ -105,8 +105,6 @@ class TestQueries(unittest.TestCase):
         assert isinstance(res, datetime), (res, type(res))
 
     def test_correct_timezone(self):
-        if self.db_cls in [dbs.Dremio]:
-            self.skipTest("No support for timezones.")
         name = "tbl_" + random_table_suffix()
         db = get_conn(self.db_cls)
         tbl = table(name, schema={"id": int, "created_at": TimestampTZ(9), "updated_at": TimestampTZ(9)})
@@ -121,7 +119,8 @@ class TestQueries(unittest.TestCase):
             now = now.replace(microsecond=ms)
 
         db.query(tbl.insert_row(1, now, now))
-        db.query(db.dialect.set_timezone_to_utc())
+        if self.db_cls not in [dbs.Dremio]:
+            db.query(db.dialect.set_timezone_to_utc())
 
         t = db.table(tbl).query_schema()
         t.schema["created_at"] = t.schema["created_at"].replace(precision=t.schema["created_at"].precision)
