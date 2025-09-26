@@ -152,10 +152,6 @@ class Dialect(BaseDialect, Mixin_Schema):
             'queries instead.'
         )
 
-    def type_repr(self, t) -> str:
-        repr = super().type_repr(t)
-        return repr
-
 
 class Dremio(ThreadedDatabase):
     dialect = Dialect()
