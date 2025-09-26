@@ -117,6 +117,14 @@ class Dialect(BaseDialect, Mixin_Schema):
     def to_string(self, s: str):
         return f"cast({s} as varchar)"
 
+    @staticmethod
+    def nan_to_none(value: Optional[object]) -> Optional[int]:
+        from math import isnan
+        if value is not None and not isinstance(value, int):
+            return None if isnan(value) else int(value)
+        else:
+            return value
+
     def parse_type(
         self,
         table_path: DbPath,
@@ -126,22 +134,9 @@ class Dialect(BaseDialect, Mixin_Schema):
         numeric_precision: int = None,
         numeric_scale: int = None,
     ) -> ColType:
-        from math import isnan
-        if datetime_precision is not None and not isinstance(datetime_precision, int):
-            if isnan(datetime_precision):
-                datetime_precision = None
-            else:
-                datetime_precision = int(datetime_precision)
-        if numeric_precision is not None and not isinstance(numeric_precision, int):
-            if isnan(numeric_precision):
-                numeric_precision = None
-            else:
-                numeric_precision = int(numeric_precision)
-        if numeric_scale is not None and not isinstance(numeric_scale, int):
-            if isnan(numeric_scale):
-                numeric_scale = None
-            else:
-                numeric_scale = int(numeric_scale)
+        datetime_precision = self.nan_to_none(datetime_precision)
+        numeric_precision = self.nan_to_none(numeric_precision)
+        numeric_scale = self.nan_to_none(numeric_scale)
 
         return super().parse_type(table_path, col_name, type_repr, datetime_precision, numeric_precision, numeric_scale)
 
