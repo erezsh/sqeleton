@@ -114,7 +114,7 @@ class TestQueries(unittest.TestCase):
         tz = pytz.timezone("Europe/Berlin")
 
         now = datetime.now(tz)
-        if isinstance(db, dbs.Presto):
+        if isinstance(db, dbs.Presto) or isinstance(db, dbs.Dremio):
             ms = now.microsecond // 1000 * 1000  # Presto max precision is 3
             now = now.replace(microsecond=ms)
 
