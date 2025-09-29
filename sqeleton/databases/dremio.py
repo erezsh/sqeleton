@@ -141,11 +141,12 @@ class Dialect(BaseDialect, Mixin_Schema):
         return super().parse_type(table_path, col_name, type_repr, datetime_precision, numeric_precision, numeric_scale)
 
     def set_timezone_to_utc(self) -> str:
-        raise NotImplementedError(
-            'Dremio does not support setting session timezone to UTC. Dremio retrieves the time or timestamp value '
-            'with the assumption that the time zone is in Coordinated Universal Time (UTC). Use CONVERT_TIMEZONE in '
-            'queries instead.'
-        )
+        """Dremio does not support setting session timezone to UTC. Dremio retrieves the time or timestamp value
+        with the assumption that the time zone is in Coordinated Universal Time (UTC). Use CONVERT_TIMEZONE in
+        queries instead.
+        """
+        pass
+
 
 
 class Dremio(ThreadedDatabase):
