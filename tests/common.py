@@ -33,6 +33,7 @@ TEST_CLICKHOUSE_CONN_STRING: str = os.environ.get("CLICKHOUSE_URI")
 # vertica uri provided for docker - "vertica://vertica:Password1@localhost:5433/vertica"
 TEST_VERTICA_CONN_STRING: str = os.environ.get("VERTICA_URI")
 TEST_DUCKDB_CONN_STRING: str = "duckdb://main:@:memory:"
+TEST_DREMIO_CONN_STRING: str = os.environ.get("DREMIO_URI") or None
 
 
 DEFAULT_N_SAMPLES = 50
@@ -74,6 +75,7 @@ CONN_STRINGS = {
     db.Clickhouse: TEST_CLICKHOUSE_CONN_STRING,
     db.Vertica: TEST_VERTICA_CONN_STRING,
     db.DuckDB: TEST_DUCKDB_CONN_STRING,
+    db.Dremio: TEST_DREMIO_CONN_STRING,
 }
 
 _database_instances = {}

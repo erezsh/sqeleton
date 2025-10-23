@@ -22,6 +22,7 @@ from .trino import Trino
 from .clickhouse import Clickhouse
 from .vertica import Vertica
 from .duckdb import DuckDB
+from .dremio import Dremio
 
 
 @dataclass
@@ -87,6 +88,7 @@ DATABASE_BY_SCHEME = {
     "trino": Trino,
     "clickhouse": Clickhouse,
     "vertica": Vertica,
+    "dremio": Dremio,
 }
 
 
@@ -132,6 +134,7 @@ class Connect:
         - clickhouse
         - vertica
         - duckdb
+        - dremio
         """
 
         dsn = dsnparse.parse(db_uri)
@@ -247,6 +250,7 @@ class Connect:
         - trino
         - clickhouse
         - vertica
+        - dremio
 
         Example:
             >>> connect("mysql://localhost/db")
