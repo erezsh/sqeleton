@@ -61,7 +61,7 @@ sqlalchemy-dremio = {git = "https://github.com/scottkwalker/sqlalchemy_dremio", 
 parameterized = "*"
 unittest-parallel = "*"
 
-duckdb = "*"
+duckdb = "<1.2"
 mysql-connector-python = "*"
 # psycopg2 = "*"
 psycopg2-binary = "*"
