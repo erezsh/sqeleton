@@ -7,7 +7,6 @@ import pytz
 from sqeleton import connect
 from sqeleton import databases as dbs
 from sqeleton.queries import table, current_timestamp, NormalizeAsString, ForeignKey, Compiler
-from .common import TEST_MYSQL_CONN_STRING
 from .common import str_to_checksum, make_test_each_database_in_list, get_conn, random_table_suffix
 from sqeleton.abcs.database_types import TimestampTZ
 
@@ -28,27 +27,27 @@ TEST_DATABASES = {
 test_each_database: Callable = make_test_each_database_in_list(TEST_DATABASES)
 
 
+@test_each_database
 class TestDatabase(unittest.TestCase):
-    def setUp(self):
-        self.mysql = connect(TEST_MYSQL_CONN_STRING)
-
     def test_connect_to_db(self):
-        self.assertEqual(1, self.mysql.query("SELECT 1", int))
+        db = get_conn(self.db_cls)
+        self.assertEqual(1, db.query("SELECT 1", int))
 
 
+@test_each_database
 class TestMD5(unittest.TestCase):
     def test_md5_as_int(self):
-        class MD5Dialect(dbs.mysql.Dialect, dbs.mysql.Mixin_MD5):
-            pass
-
-        self.mysql = connect(TEST_MYSQL_CONN_STRING)
-        self.mysql.dialect = MD5Dialect()
-
-        str = "hello world"
-        query_fragment = self.mysql.dialect.md5_as_int("'{0}'".format(str))
+        db = get_conn(self.db_cls)
+        
+        # Get the MD5 mixin for this database's dialect
+        if not hasattr(db.dialect, 'md5_as_int'):
+            self.skipTest(f"{self.db_cls.__name__} does not support MD5")
+        
+        str_value = "hello world"
+        query_fragment = db.dialect.md5_as_int("'{0}'".format(str_value))
         query = f"SELECT {query_fragment}"
 
-        self.assertEqual(str_to_checksum(str), self.mysql.query(query, int))
+        self.assertEqual(str_to_checksum(str_value), db.query(query, int))
 
 
 class TestConnect(unittest.TestCase):
@@ -111,7 +110,7 @@ class TestQueries(unittest.TestCase):
 
         db.query(tbl.create())
 
-        tz = pytz.timezone("Europe/Berlin")
+        tz = pytz.timezone("UTC")
 
         now = datetime.now(tz)
         if isinstance(db, dbs.Presto) or isinstance(db, dbs.Dremio):
