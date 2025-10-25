@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
     postgres:
       container_name: dd-postgresql
@@ -49,6 +47,26 @@ services:
       tty: true
       networks:
         - local
+
+    oracle:
+      container_name: dd-oracle
+      image: gvenzl/oracle-free:slim-faststart
+      hostname: oracle-db
+      ports:
+        - "1521:1521"
+      environment:
+        - ORACLE_PASSWORD=YourSecurePassword123
+        - ORACLE_DATABASE=app
+        - APP_USER=app
+        - APP_USER_PASSWORD=app
+      volumes:
+        - oracle-volume:/opt/oracle/oradata
+      restart: unless-stopped
+      healthcheck:
+        test: [ "CMD", "healthcheck.sh" ]
+        interval: 30s
+        timeout: 10s
+        retries: 5
 
     clickhouse:
       container_name: dd-clickhouse
@@ -145,6 +163,7 @@ volumes:
   # The vertica docker image is 404
   #vertica-data:
   dremio-data:
+  oracle-volume:
 
 networks:
   local:
