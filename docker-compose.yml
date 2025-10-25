@@ -57,16 +57,14 @@ services:
       environment:
         - ORACLE_PASSWORD=YourSecurePassword123
         - ORACLE_DATABASE=app
-        - APP_USER=app
-        - APP_USER_PASSWORD=app
+        - APP_USER=oracle
+        - APP_USER_PASSWORD=Password1
       volumes:
         - oracle-volume:/opt/oracle/oradata
-      restart: unless-stopped
-      healthcheck:
-        test: [ "CMD", "healthcheck.sh" ]
-        interval: 30s
-        timeout: 10s
-        retries: 5
+      networks:
+        - local
+      restart: always
+
 
     clickhouse:
       container_name: dd-clickhouse
@@ -94,11 +92,16 @@ services:
     # prestodb.dbapi.connect(host="127.0.0.1", user="presto").cursor().execute('SELECT * FROM system.runtime.nodes')
     presto:
         container_name: dd-presto
-        build:
-            context: ./dev
-            dockerfile: ./Dockerfile.prestosql.340
+        image: prestodb/presto:latest
         volumes:
-            - ./dev/presto-conf/standalone:/opt/presto/etc:ro
+            - ./dev/presto-conf/standalone/config.properties:/opt/presto-server/etc/config.properties:ro
+            - ./dev/presto-conf/standalone/jvm.config:/opt/presto-server/etc/jvm.config:ro
+            - ./dev/presto-conf/standalone/node.properties:/opt/presto-server/etc/node.properties:ro
+            - ./dev/presto-conf/standalone/log.properties:/opt/presto-server/etc/log.properties:ro
+            - ./dev/presto-conf/standalone/password.db:/opt/presto/etc/password.db:ro
+            - ./dev/presto-conf/standalone/password-authenticator.properties:/opt/presto/etc/password-authenticator.properties:ro
+            - ./dev/presto-conf/standalone/combined.pem:/opt/presto/etc/combined.pem:ro
+            - ./dev/presto-conf/standalone/catalog:/opt/presto-server/etc/catalog:ro
         ports:
             - '8080:8080'
         tty: true
@@ -113,7 +116,8 @@ services:
             - '8081:8080'
             - '8443:8443'
         volumes:
-            - ./dev/trino-conf/etc:/etc/trino:ro
+            - ./dev/trino-conf/etc/password.db:/etc/trino/password.db:ro
+            - ./dev/trino-conf/etc/password-authenticator.properties:/etc/trino/password-authenticator.properties:ro
         networks:
             - local
 
