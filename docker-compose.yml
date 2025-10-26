@@ -54,11 +54,8 @@ services:
       hostname: oracle-db
       ports:
         - "1521:1521"
-      environment:
-        - ORACLE_PASSWORD=YourSecurePassword123
-        - ORACLE_DATABASE=app
-        - APP_USER=oracle
-        - APP_USER_PASSWORD=Password1
+      env_file:
+        - dev/dev.env
       volumes:
         - oracle-volume:/opt/oracle/oradata
       networks:
@@ -114,10 +111,14 @@ services:
         hostname: trino
         ports:
             - '8081:8080'
-            - '8443:8443'
+            - '8444:8443'
         volumes:
+            - ./dev/trino-conf/etc/config.properties:/etc/trino/config.properties:ro
+            - ./dev/trino-conf/etc/node.properties:/etc/trino/node.properties:ro
             - ./dev/trino-conf/etc/password.db:/etc/trino/password.db:ro
             - ./dev/trino-conf/etc/password-authenticator.properties:/etc/trino/password-authenticator.properties:ro
+            - ./dev/trino-conf/etc/keystore.jks:/etc/trino/keystore.jks:ro
+            - ./dev/trino-conf/etc/catalog:/etc/trino/catalog:ro
         networks:
             - local
 
