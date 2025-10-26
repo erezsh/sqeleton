@@ -18,10 +18,10 @@ Mixin_MD5 = presto.Mixin_MD5
 
 class Mixin_NormalizeValue(presto.Mixin_NormalizeValue):
     def normalize_timestamp(self, value: str, coltype: TemporalType) -> str:
-        if coltype.rounds:
-            s = f"date_format(cast({value} as timestamp({coltype.precision})), '%Y-%m-%d %H:%i:%S.%f')"
-        else:
-            s = f"date_format(cast({value} as timestamp(6)), '%Y-%m-%d %H:%i:%S.%f')"
+        # Trino supports timestamp(N) precision in casts
+        # Use precision 6 (microseconds) for maximum precision when not rounding
+        precision = coltype.precision if coltype.rounds else 6
+        s = f"date_format(cast({value} as timestamp({precision})), '%Y-%m-%d %H:%i:%S.%f')"
 
         return f"RPAD(RPAD({s}, {TIMESTAMP_PRECISION_POS + coltype.precision}, '.'), {TIMESTAMP_PRECISION_POS + 6}, '0')"
 
