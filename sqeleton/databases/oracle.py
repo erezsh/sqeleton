@@ -1,5 +1,6 @@
 from typing import Dict, List, Optional
 
+from ..queries.compiler import CompiledCode
 from ..utils import match_regexps
 from ..abcs.database_types import (
     Decimal,
@@ -14,6 +15,7 @@ from ..abcs.database_types import (
     TimestampTZ,
     FractionalType,
 )
+from ..queries.ast_classes import ForeignKey
 from ..abcs.mixins import AbstractMixin_MD5, AbstractMixin_NormalizeValue, AbstractMixin_Schema
 from ..abcs import Compilable
 from ..queries import this, table, SKIP
@@ -124,6 +126,8 @@ class Dialect(BaseDialect, Mixin_Schema, Mixin_OptimizerHints):
         return f"DECODE({a}, {b}, 1, 0) = 0"
 
     def type_repr(self, t) -> str:
+        if isinstance(t, ForeignKey):
+            return self.type_repr(t.type)
         try:
             return {
                 str: "VARCHAR(1024)",
@@ -167,16 +171,17 @@ class Dialect(BaseDialect, Mixin_Schema, Mixin_OptimizerHints):
 
 class Oracle(ThreadedDatabase):
     dialect = Dialect()
-    CONNECT_URI_HELP = "oracle://<user>:<password>@<host>/<database>"
+    CONNECT_URI_HELP = "oracle://<user>:<password>@<host>:port/<database>"
     CONNECT_URI_PARAMS = ["database?"]
 
-    def __init__(self, *, host, database, thread_count, **kw):
-
+    def __init__(self, *, host, database, thread_count, port=None, **kw):
         self.kwargs = kw
 
         # Build dsn if not present
         if "dsn" not in kw:
-            self.kwargs["dsn"] = f"{host}/{database}" if database else host
+            # Support for different ports
+            port = port or 1521
+            self.kwargs["dsn"] = f"{host}:{port}/{database}" if database else f"{host}:{port}"
 
         self.default_schema = kw.get("user").upper()
 
@@ -192,7 +197,15 @@ class Oracle(ThreadedDatabase):
         except Exception as e:
             raise ConnectError(*e.args) from e
 
-    def _query_cursor(self, c, sql_code: str):
+    def _query_cursor(self, c, sql_code: CompiledCode):
+        # Convert %s style parameters to :1, :2, :3 style for Oracle to support queries built by sqeleton (tbl.create())
+        if sql_code.args:
+            # Replace %s with :1, :2, :3, etc.
+            oracle_sql = sql_code.code
+            for i in range(len(sql_code.args)):
+                oracle_sql = oracle_sql.replace('%s', f':{i+1}', 1)
+            sql_code = CompiledCode(oracle_sql, sql_code.args, sql_code.type)
+        
         try:
             return super()._query_cursor(c, sql_code)
         except self._oracle.DatabaseError as e:

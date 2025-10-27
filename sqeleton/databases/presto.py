@@ -59,10 +59,11 @@ class Mixin_NormalizeValue(AbstractMixin_NormalizeValue):
 
     def normalize_timestamp(self, value: str, coltype: TemporalType) -> str:
         # TODO rounds
+        # Presto doesn't support timestamp(N) in casts, just use timestamp
         if coltype.rounds:
-            s = f"date_format(cast({value} as timestamp(6)), '%Y-%m-%d %H:%i:%S.%f')"
+            s = f"date_format(cast({value} as timestamp), '%Y-%m-%d %H:%i:%S.%f')"
         else:
-            s = f"date_format(cast({value} as timestamp(6)), '%Y-%m-%d %H:%i:%S.%f')"
+            s = f"date_format(cast({value} as timestamp), '%Y-%m-%d %H:%i:%S.%f')"
 
         return f"RPAD(RPAD({s}, {TIMESTAMP_PRECISION_POS+coltype.precision}, '.'), {TIMESTAMP_PRECISION_POS+6}, '0')"
 
