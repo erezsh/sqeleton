@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "sqeleton"
-version = "0.1.8"
+version = "0.1.7"
 description = "Python library for querying SQL databases"
 authors = ["Erez Shinan <erezshin@gmail.com>"]
 license = "MIT"
@@ -14,7 +14,7 @@ classifiers = [
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
-    "Development Status :: 2 - Pre-Alpha",
+    "Development Status :: 3 - Alpha",
     "Environment :: Console",
     "Topic :: Database :: Database Engines/Servers",
     "Typing :: Typed"
